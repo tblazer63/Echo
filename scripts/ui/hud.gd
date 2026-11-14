@@ -12,6 +12,24 @@ var _health: HealthBar
 var _rec_label: Label
 var _vignette: ColorRect
 var _vig := 0.0
+var _boss: VBoxContainer
+var _boss_name: Label
+var _boss_bar: ProgressBar
+var _boss_fill: StyleBoxFlat
+
+
+func show_boss(title: String) -> void:
+	_boss_name.text = title
+	_boss.visible = true
+
+
+func hide_boss() -> void:
+	_boss.visible = false
+
+
+func set_boss_health(ratio: float, shielded: bool) -> void:
+	_boss_bar.value = ratio
+	_boss_fill.bg_color = Color(0.95, 0.3, 0.85) if shielded else Game.ECHO_CYAN
 var _objective_panel: PanelContainer
 var _prompt_label: Label
 var _prompt_panel: PanelContainer
@@ -74,6 +92,33 @@ func _ready() -> void:
 	_rec_label.visible = false
 	root.add_child(_rec_label)
 
+	# Boss bar (top-center, hidden until a boss fight).
+	_boss = VBoxContainer.new()
+	_boss.anchor_left = 0.5
+	_boss.anchor_right = 0.5
+	_boss.offset_left = -300
+	_boss.offset_right = 300
+	_boss.offset_top = 70
+	_boss.visible = false
+	_boss.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_boss)
+	_boss_name = UiKit.label("THE SENTINEL", 18, Color(1.0, 0.6, 0.9), UiKit.spaced())
+	_boss_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_boss.add_child(_boss_name)
+	_boss_bar = ProgressBar.new()
+	_boss_bar.custom_minimum_size = Vector2(600, 12)
+	_boss_bar.show_percentage = false
+	_boss_bar.max_value = 1.0
+	_boss_bar.value = 1.0
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.05, 0.05, 0.12, 0.7)
+	var fg := StyleBoxFlat.new()
+	fg.bg_color = Color(0.95, 0.3, 0.85)
+	_boss_bar.add_theme_stylebox_override("background", bg)
+	_boss_bar.add_theme_stylebox_override("fill", fg)
+	_boss_fill = fg
+	_boss.add_child(_boss_bar)
+
 	# Damage vignette.
 	_vignette = UiKit.full_rect(ColorRect.new()) as ColorRect
 	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -108,6 +153,12 @@ func _ready() -> void:
 	root.add_child(_flash)
 
 	Game.objective_changed.connect(_on_objective)
+	Game.boss_hud.connect(func(show: bool, title: String, ratio: float, shielded: bool) -> void:
+		if not show:
+			hide_boss()
+			return
+		show_boss(title)
+		set_boss_health(ratio, shielded))
 	Game.progress_changed.connect(func(t: String) -> void:
 		_progress_label.text = t
 		_progress_label.visible = t != "")

@@ -10,6 +10,8 @@ signal player_respawned
 signal progress_changed(text: String)
 
 var progress: String = ""
+## Boss HUD: visible, title, health ratio, shielded.
+signal boss_hud(show: bool, title: String, ratio: float, shielded: bool)
 
 
 func set_progress(text: String) -> void:

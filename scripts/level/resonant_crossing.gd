@@ -37,6 +37,50 @@ func _on_drone_defeated(_d: Node) -> void:
 		surf.activate()
 
 
+var sentinel: Sentinel
+var pylons: Array[ShieldPylon] = []
+
+
+## The Sentinel guards the Spire on island C; two pylons power its shield.
+func _build_sentinel_arena() -> void:
+	for off: Vector3 in [Vector3(-7.6, 0, -1.0), Vector3(7.8, 0, -2.6)]:
+		var p := ShieldPylon.new()
+		p.position = ISLAND_C + off
+		add_child(p)
+		pylons.append(p)
+	sentinel = Sentinel.new()
+	sentinel.arena_center = ISLAND_C + Vector3(-2.5, 0, 2.0)
+	sentinel.pylons = pylons
+	add_child(sentinel)
+	sentinel.global_position = ISLAND_C + Vector3(-2.5, 5.5, 2.0)
+	sentinel.health_changed.connect(func(hp: float, mx: float) -> void:
+		Game.boss_hud.emit(true, "THE SENTINEL", hp / mx, sentinel.shield_up))
+	sentinel.shield_changed.connect(func(up: bool) -> void:
+		Game.boss_hud.emit(true, "THE SENTINEL", sentinel.hp / sentinel.max_hp, up)
+		if up:
+			Game.set_progress("Break the shield pylons (Echo Scan or Sonic Bolt)")
+		else:
+			Game.set_progress("Shield down. Strike the core!"))
+	sentinel.defeated.connect(func() -> void:
+		Game.boss_hud.emit(false, "", 0.0, false)
+		Game.set_progress("")
+		Game.set_objective("Restore the First Resonance Spire")
+		signal_gate.sealed = false
+		signal_gate.recheck())
+	_zone(ISLAND_C + Vector3(6.0, 1.5, 0.0), Vector3(5, 3, 12), func() -> void:
+		if sentinel.is_defeated():
+			return
+		signal_gate.sealed = true
+		sentinel.start_fight()
+		Game.set_objective("Defeat the Sentinel")
+		Game.set_progress("Break the shield pylons (Echo Scan or Sonic Bolt)")
+		Game.prompt("THE SENTINEL awakens! Its shield draws power from the pylons.", 5.0))
+	signal_gate.sealed = true
+	Game.player_respawned.connect(func() -> void:
+		if sentinel.active and not sentinel.is_defeated():
+			sentinel.reset_fight())
+
+
 func _on_switch_changed(_p: bool) -> void:
 	if clone_gate.is_open:
 		return
@@ -272,6 +316,7 @@ func _build_layout() -> void:
 	restoration.add_crystals(self, ISLAND_D, 7.5, 7)
 	restoration.add_crystals(self, ISLAND_C, 9.5, 10)
 	restoration.set_corrupted()
+	_build_sentinel_arena()
 
 	# Holographic hints of the hidden world near the path.
 	_holo_arch(Vector3(-11, 0, -14), deg_to_rad(70))

@@ -13,6 +13,7 @@ var _spin := 0.08
 var _power := 0.35
 var _target_power := 0.35
 var _rune_mat: StandardMaterial3D
+var _area: Area3D
 
 
 func _ready() -> void:
@@ -139,6 +140,7 @@ func _ready() -> void:
 	add_child(_light)
 
 	var area := Area3D.new()
+	_area = area
 	area.collision_layer = 0
 	area.collision_mask = 2  # player
 	var col := CollisionShape3D.new()
@@ -160,9 +162,23 @@ func _process(delta: float) -> void:
 	_light.light_energy = _power * 3.0
 
 
+## While sealed (Sentinel alive) the Spire cannot be restored.
+var sealed := false
+
+
 func _on_body_entered(body: Node3D) -> void:
-	if body.is_in_group("player") and not Game.won:
-		restore()
+	if not body.is_in_group("player") or Game.won:
+		return
+	if sealed:
+		Game.prompt("The Sentinel's dissonance seals the Spire. Defeat it first!", 3.0)
+		return
+	restore()
+
+
+## Re-checks the trigger (player may already be standing inside when unsealed).
+func recheck() -> void:
+	for b in _area.get_overlapping_bodies():
+		_on_body_entered(b)
 
 
 func restore() -> void:

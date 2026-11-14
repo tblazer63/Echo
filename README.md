@@ -30,7 +30,8 @@ Scan, bolt and dash share one **Echo Energy** bar that refills quickly, so you c
 4. **Echo Surfing.** Clearing the courtyard wakes a Surf Generator. Ride a glowing wave over the sea of clouds, steer with A/D, and collect rings.
 5. **The Duplicate Key (Echo Clones).** Two pressure switches have to be held at the same time. Record a clone standing on one, then step on the other yourself.
 6. **Transforming bridge.** Scan the ancient resonance machine and a shattered bridge swings up into place.
-7. **World restoration.** Restore the Spire: the Dissonance crystals shatter, the muted world floods with color, waterfalls return, flowers bloom, a new music layer begins, and the drones you defeated wake up as friendly robots that circle the Spire.
+7. **The Sentinel (mini-boss).** A floating guardian seals the Spire. Two pylons power its shield, and you break them with Echo Scan or Sonic Bolts. With the shield down, scan to expose its core for double damage. At half health it re-forms the shield and switches to 3-shot spreads.
+8. **World restoration.** Restore the Spire: the Dissonance crystals shatter, the muted world floods with color, waterfalls return, flowers bloom, a new music layer begins, and the drones you defeated wake up as friendly robots that circle the Spire.
 
 ## Technically interesting
 
@@ -40,7 +41,7 @@ Scan, bolt and dash share one **Echo Energy** bar that refills quickly, so you c
 - **Echo Clones** record your transform every physics tick and replay it deterministically on an `AnimatableBody3D` that switches can detect.
 - **Echo Surfing** follows a Catmull-Rom `Curve3D` with a generated ribbon mesh and a flowing-wave shader.
 - **Runs on integrated GPUs.** Graphics quality is detected automatically: FSR upscaling, cheaper shadows and MultiMesh batching. It holds about 60 FPS on an AMD Radeon 610M.
-- **Automated QA.** `--qa=logic` plays through the whole mission. It reveals and walks the bridges, fights the drones with real bolts, rides the wave, solves the clone puzzle, transforms the bridge and restores the world. `--qa=shots:<dir>` and `--qa=perf` cover screenshots and frame timing.
+- **Automated QA.** `--qa=logic` plays through the whole mission in 38 checks. It reveals and walks the bridges, fights the drones with real bolts, rides the wave, solves the clone puzzle, transforms the bridge, beats both phases of the Sentinel and restores the world. `--qa=shots:<dir>` and `--qa=perf` cover screenshots and frame timing.
 
 ## Run from source
 
@@ -52,7 +53,7 @@ godot --path . -- --qa=perf
 
 ## Roadmap (after the hackathon)
 
-The Sentinel mini-boss, Stone Guardian, Echo Anchor, Resonance Burst, the Second and Third Spires, and the Resonance Titan.
+Stone Guardian, Echo Anchor, Resonance Burst, the Second and Third Spires, and the Resonance Titan.
 
 ## Credits
 

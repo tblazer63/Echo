@@ -228,6 +228,25 @@ func _qa_tour(dir: String) -> void:
 	await _shot(dir, "17_bridge_moving.png")
 	await _wait(2.6)
 	await _shot(dir, "18_bridge_done.png")
+	_teleport(ResonantCrossing.ISLAND_C + Vector3(7.5, 0.2, 2.5), 85.0, 22.0)
+	await _wait(2.5)
+	await _shot(dir, "18b_sentinel.png")
+	for p in level.pylons:
+		p.disable()
+	await _wait(0.6)
+	player.emitter.charge = 1.0
+	player.emitter.try_pulse()
+	await _wait(0.5)
+	await _shot(dir, "18c_sentinel_exposed.png")
+	var guard := 0
+	while not level.sentinel.is_defeated() and guard < 80:
+		if level.sentinel.shield_up:
+			for p in level.pylons:
+				p.disable()
+		level.sentinel.take_damage(20.0, level.sentinel.global_position)
+		await _wait(0.05)
+		guard += 1
+	await _wait(1.5)
 	_teleport(Vector3(0, 4.2, -84), 0.0, 0.0)
 	await _wait(0.5)
 	await _shot(dir, "19_spire_corrupted.png")
@@ -431,6 +450,37 @@ func _qa_logic() -> void:
 	await _wait(0.4)
 	_check(player.global_position.x < 9.0 and player.global_position.y > 3.0,
 		"walked across the bridge to the spire island (pos %s)" % str(player.global_position), fails)
+
+	# 10b. Sentinel mini-boss (entered the arena by walking off the bridge).
+	await _wait(1.0)
+	var boss := level.sentinel
+	_check(boss.active, "Sentinel awakens when the player enters the arena", fails)
+	_check(level.signal_gate.sealed, "Spire sealed while the Sentinel lives", fails)
+	var hp0 := boss.hp
+	boss.take_damage(50.0, boss.global_position)
+	_check(is_equal_approx(boss.hp, hp0), "shield blocks damage while pylons stand", fails)
+	for p in level.pylons:
+		p.disable()
+	await _wait(0.3)
+	_check(not boss.shield_up, "breaking both pylons drops the shield", fails)
+	var guard := 0
+	while boss.phase == 1 and guard < 60:
+		boss.take_damage(20.0, boss.global_position)
+		await _wait(0.05)
+		guard += 1
+	await _wait(0.3)
+	_check(boss.phase == 2 and boss.shield_up, "phase 2 re-forms the shield", fails)
+	for p in level.pylons:
+		p.disable()
+	await _wait(0.3)
+	guard = 0
+	while not boss.is_defeated() and guard < 60:
+		boss.take_damage(20.0, boss.global_position)
+		await _wait(0.05)
+		guard += 1
+	await _wait(0.5)
+	_check(boss.is_defeated(), "Sentinel defeated", fails)
+	_check(not level.signal_gate.sealed, "defeating the Sentinel unseals the Spire", fails)
 
 	# 11. Signal gate win + world restoration.
 	_check(not level.restoration.restored, "world starts corrupted", fails)
