@@ -9,6 +9,8 @@ var _fired := false
 
 
 func _ready() -> void:
+	collision_layer = 0
+	collision_mask = 2  # player
 	var col := CollisionShape3D.new()
 	var s := BoxShape3D.new()
 	s.size = size

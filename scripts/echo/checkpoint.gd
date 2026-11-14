@@ -8,6 +8,8 @@ var _active := false
 
 
 func _ready() -> void:
+	collision_layer = 0
+	collision_mask = 2  # player
 	var col := CollisionShape3D.new()
 	var s := CylinderShape3D.new()
 	s.radius = 1.8

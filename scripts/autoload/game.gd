@@ -6,6 +6,15 @@ signal prompt_requested(text: String, duration: float)
 signal checkpoint_reached(pos: Vector3)
 signal level_won
 signal player_respawned
+## Secondary objective line (e.g. "Drones disabled 1 / 3").
+signal progress_changed(text: String)
+
+var progress: String = ""
+
+
+func set_progress(text: String) -> void:
+	progress = text
+	progress_changed.emit(text)
 
 const ECHO_CYAN := Color(0.25, 0.95, 1.0)
 
@@ -59,6 +68,9 @@ func _setup_input() -> void:
 	_bind("pulse", [KEY_Q], [MOUSE_BUTTON_RIGHT])
 	_bind("interact", [KEY_E])
 	_bind("pause", [KEY_ESCAPE])
+	_bind("fire", [], [MOUSE_BUTTON_LEFT])
+	_bind("record", [KEY_R])
+	_bind("dash", [KEY_F, KEY_CTRL])
 
 
 func _bind(action: StringName, keys: Array, mouse_buttons: Array = []) -> void:
@@ -80,6 +92,7 @@ func reset_run() -> void:
 	run_time = 0.0
 	running = false
 	shown_prompts.clear()
+	progress = ""
 	checkpoint_pos = Vector3(0, 1.2, 3)
 	checkpoint_yaw = 0.0
 

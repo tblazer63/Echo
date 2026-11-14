@@ -8,12 +8,40 @@ var gate: LockedGate
 var signal_gate: SignalGate
 var sun: DirectionalLight3D
 var env: Environment
+var drones: Array[EchoDrone] = []
+var surf: EchoSurf
+var switch_a: PressureSwitch
+var switch_b: PressureSwitch
+var clone_gate: LockedGate
+var machine: ResonanceMachine
+var bridge: TransformBridge
+var restoration: RestorationController
 
 const START := Vector3(0, 0, 0)
 const ISLAND_A := Vector3(0, 0, -27)
 const RELAY_ISLET := Vector3(-24, 0, -27)
 const ISLAND_B := Vector3(0, 0, -53)
 const ISLAND_C := Vector3(0, 4, -88)
+const ISLAND_D := Vector3(29, 4, -88)
+
+
+func _on_drone_defeated(_d: Node) -> void:
+	var n := 0
+	for d in drones:
+		if d.is_defeated():
+			n += 1
+	Game.set_progress("Drones disabled  %d / %d" % [n, drones.size()])
+	if n == drones.size():
+		Game.set_objective("Ride the Echo Wave to the temple isle")
+		Game.set_progress("")
+		surf.activate()
+
+
+func _on_switch_changed(_p: bool) -> void:
+	var count := int(switch_a.is_pressed()) + int(switch_b.is_pressed())
+	Game.set_progress("Switches  %d / 2" % count)
+	if count == 2 and not clone_gate.is_open:
+		clone_gate.unlock()
 
 
 func _ready() -> void:
@@ -134,35 +162,114 @@ func _build_layout() -> void:
 	gate.unlocked.connect(func() -> void:
 		Game.prompt("The gate answers your echo", 3.0))
 
-	# --- Island B ---
-	Builders.island(self, ISLAND_B, 6.0, 10.0)
-	_checkpoint(ISLAND_B + Vector3(0, 0, 2.5), 0.0)
-	Builders.pillar(self, ISLAND_B + Vector3(-4.0, 0, -2.0), 5.0, 1.0, true)
-	Builders.pillar(self, ISLAND_B + Vector3(4.0, 0, -2.0), 6.5)
-	Builders.waterfall(self, ISLAND_B + Vector3(-5.95, -0.4, 0.5), 2.5, 22.0, deg_to_rad(-90))
-	_zone(ISLAND_B + Vector3(0, 1.5, 2), Vector3(12, 3, 4), func() -> void:
-		Game.set_objective("Climb to the Signal Gate")
-		Game.prompt("Hidden steps rise toward the gate. Pulse again mid-climb if needed.", 5.0, "climb_hint"))
+	# --- World restoration controller (world starts slightly corrupted) ---
+	restoration = RestorationController.new()
+	add_child(restoration)
+	restoration.setup(env, sun)
 
-	# Timed ascending hidden steps (B -> C).
-	var steps := [
-		Vector3(0, 0.6, -61.5), Vector3(2.2, 1.4, -65.5), Vector3(0, 2.2, -69.5),
-		Vector3(-2.2, 3.0, -73.5), Vector3(0, 3.8, -77.0),
-	]
-	for p: Vector3 in steps:
-		_echo_platform(p, Vector3(2.8, 0.4, 2.8))
+	# --- Island B: Courtyard Interference (combat) ---
+	Builders.island(self, ISLAND_B, 6.5, 10.0)
+	_checkpoint(ISLAND_B + Vector3(0, 0, 3.0), 0.0)
+	Builders.pillar(self, ISLAND_B + Vector3(-4.3, 0, -2.0), 5.0, 1.0, true)
+	Builders.pillar(self, ISLAND_B + Vector3(-1.5, 0, -4.5), 6.5)
+	Builders.waterfall(self, ISLAND_B + Vector3(-6.45, -0.4, 0.5), 2.5, 22.0, deg_to_rad(-90))
+	for off: Vector3 in [Vector3(-3.5, 3.5, -3.0), Vector3(3.5, 4.0, -4.0), Vector3(0.0, 5.0, -8.0)]:
+		var d := EchoDrone.new()
+		d.position = ISLAND_B + off
+		add_child(d)
+		drones.append(d)
+		d.defeated.connect(_on_drone_defeated)
+	_zone(ISLAND_B + Vector3(0, 1.5, 4.5), Vector3(13, 3, 3), func() -> void:
+		Game.set_objective("Disable the corrupted Echo Drones")
+		Game.set_progress("Drones disabled  0 / %d" % drones.size())
+		Game.prompt("LMB fires a Sonic Bolt.  Echo Scan (Q) stuns drones and exposes their cores!", 6.0, "combat_hint"))
+	Game.player_respawned.connect(func() -> void:
+		for d in drones:
+			d.reset_drone()
+		for p in get_tree().get_nodes_in_group("enemy_projectile"):
+			p.call("destroy"))
 
-	# --- Island C: Signal Gate ---
+	# --- Echo Surf: B -> island D over the clouds ---
+	surf = EchoSurf.new()
+	surf.points = PackedVector3Array([
+		ISLAND_B + Vector3(3.8, 0.0, -2.5), Vector3(10.0, -0.8, -57.5), Vector3(19.0, -3.0, -62.0),
+		Vector3(28.0, -1.5, -66.5), Vector3(35.0, 1.5, -73.0), Vector3(34.5, 4.0, -80.0),
+		ISLAND_D + Vector3(1.5, 0.0, 4.0),
+	])
+	surf.ring_count = 8
+	add_child(surf)
+	surf.boarded.connect(func() -> void:
+		Game.set_objective("Ride the Echo Wave")
+		Game.set_progress(""))
+	surf.ring_collected.connect(func(c: int, t: int) -> void: Game.set_progress("Rings  %d / %d" % [c, t]))
+	surf.finished.connect(func(_c: int, _t: int) -> void:
+		Game.set_objective("Open the temple gate. One echo is not enough...")
+		Game.prompt("Press  R  to record an Echo Clone. It will repeat your moves.", 6.0, "clone_hint"))
+
+	# --- Island D: The Duplicate Key (clone puzzle) ---
+	Builders.island(self, ISLAND_D, 7.5, 10.0)
+	_checkpoint(ISLAND_D + Vector3(2.0, 0, 3.0), deg_to_rad(90))
+	Builders.pillar(self, ISLAND_D + Vector3(4.5, 0, -4.5), 7.0)
+	Builders.pillar(self, ISLAND_D + Vector3(-1.0, 0, -6.0), 4.0, 1.0, true)
+	Builders.arch(self, ISLAND_D + Vector3(4.0, 0, 0.0), 3.4, 4.5, deg_to_rad(90))
+	switch_a = PressureSwitch.new()
+	switch_a.id = "A"
+	switch_a.position = ISLAND_D + Vector3(-1.5, 0.0, 3.6)
+	add_child(switch_a)
+	switch_b = PressureSwitch.new()
+	switch_b.id = "B"
+	switch_b.position = ISLAND_D + Vector3(-1.5, 0.0, -3.6)
+	add_child(switch_b)
+	switch_a.changed.connect(_on_switch_changed)
+	switch_b.changed.connect(_on_switch_changed)
+
+	# Pier west of D with the clone gate and the resonance machine.
+	Builders.walkway(self, ISLAND_D + Vector3(-7.0, 0, 0), ISLAND_D + Vector3(-13.0, 0, 0), 3.6)
+	clone_gate = LockedGate.new()
+	clone_gate.position = ISLAND_D + Vector3(-8.3, 0, 0)
+	clone_gate.rotation.y = deg_to_rad(90)
+	add_child(clone_gate)
+	clone_gate.unlocked.connect(func() -> void:
+		machine.enabled = true
+		Game.set_progress("")
+		Game.set_objective("Resonate the ancient machine on the pier"))
+	machine = ResonanceMachine.new()
+	machine.position = ISLAND_D + Vector3(-12.0, 0, 1.3)
+	add_child(machine)
+	bridge = TransformBridge.new()
+	bridge.length = 7.0
+	bridge.position = ISLAND_D + Vector3(-13.0, 0, 0)
+	bridge.rotation.y = deg_to_rad(90)
+	add_child(bridge)
+	machine.activated_signal.connect(func() -> void:
+		bridge.activate()
+		Game.set_objective("Cross to the First Resonance Spire"))
+	_checkpoint(ISLAND_D + Vector3(-11.0, 0, -0.6), deg_to_rad(90))
+
+	# --- Island C: Signal Gate = First Resonance Spire ---
 	Builders.island(self, ISLAND_C, 9.5, 14.0)
-	_checkpoint(ISLAND_C + Vector3(0, 0, 7.0), 0.0)
+	_checkpoint(ISLAND_C + Vector3(6.5, 0, 0.0), deg_to_rad(90))
 	signal_gate = SignalGate.new()
 	signal_gate.position = ISLAND_C + Vector3(0, 0, -5.0)
 	add_child(signal_gate)
+	signal_gate.restored.connect(func() -> void:
+		restoration.restore(signal_gate.global_position + Vector3.UP * 7.0)
+		Sfx.set_restored_music(true))
 	Builders.pillar(self, ISLAND_C + Vector3(-7.0, 0, 2.0), 8.0)
-	Builders.pillar(self, ISLAND_C + Vector3(7.0, 0, 2.0), 8.0)
+	Builders.pillar(self, ISLAND_C + Vector3(7.0, 0, 4.5), 8.0)
 	Builders.pillar(self, ISLAND_C + Vector3(-6.0, 0, 6.5), 4.5, 1.0, true)
-	Builders.waterfall(self, ISLAND_C + Vector3(9.45, -0.4, -2.0), 4.0, 30.0, deg_to_rad(90))
-	Builders.waterfall(self, ISLAND_C + Vector3(-9.45, -0.4, -4.0), 3.0, 28.0, deg_to_rad(-90))
+	restoration.add_waterfall_spot(self, ISLAND_C + Vector3(-9.45, -0.4, -4.0), 3.0, 28.0, deg_to_rad(-90))
+	restoration.add_waterfall_spot(self, ISLAND_C + Vector3(0.0, -0.4, 9.45), 4.0, 30.0, 0.0)
+	restoration.add_flowers(self, ISLAND_C, 8.5, 140)
+	restoration.add_flowers(self, ISLAND_D, 6.5, 60)
+
+	# Dissonance crystals scattered on the route.
+	restoration.add_crystals(self, START + Vector3(0, 0, 1), 7.5, 6)
+	restoration.add_crystals(self, ISLAND_A, 8.0, 8)
+	restoration.add_crystals(self, ISLAND_B, 6.5, 7)
+	restoration.add_crystals(self, ISLAND_D, 7.5, 7)
+	restoration.add_crystals(self, ISLAND_C, 9.5, 10)
+	restoration.set_corrupted()
 
 	# Holographic hints of the hidden world near the path.
 	_holo_arch(Vector3(-11, 0, -14), deg_to_rad(70))

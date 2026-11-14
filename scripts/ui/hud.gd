@@ -4,7 +4,14 @@ extends CanvasLayer
 ## segmented Sound Energy bar (BL), contextual prompts, pause hint (TR).
 
 var emitter: EchoEmitter
+var player: Player
+var recorder: Node
 var _objective_label: Label
+var _progress_label: Label
+var _health: HealthBar
+var _rec_label: Label
+var _vignette: ColorRect
+var _vig := 0.0
 var _objective_panel: PanelContainer
 var _prompt_label: Label
 var _prompt_panel: PanelContainer
@@ -35,6 +42,9 @@ func _ready() -> void:
 	ov.add_child(UiKit.label("◆  OBJECTIVE", 13, UiKit.CYAN, UiKit.spaced()))
 	_objective_label = UiKit.label(Game.objective, 22)
 	ov.add_child(_objective_label)
+	_progress_label = UiKit.label(Game.progress, 16, UiKit.CYAN)
+	_progress_label.visible = Game.progress != ""
+	ov.add_child(_progress_label)
 
 	# --- Top-right: pause hint ---
 	var tr := UiKit.label("ESC  ‖  PAUSE", 14, Color(1, 1, 1, 0.75), UiKit.spaced())
@@ -51,6 +61,28 @@ func _ready() -> void:
 	_energy = EnergyBar.new()
 	_place(_energy, Vector2(0, 1), Rect2(30, -126, 460, 100))
 	root.add_child(_energy)
+	_health = HealthBar.new()
+	_place(_health, Vector2(0, 1), Rect2(130, -150, 360, 30))
+	root.add_child(_health)
+
+	# Clone recording indicator (top-center).
+	_rec_label = UiKit.label("", 20, Color(1.0, 0.45, 0.55), UiKit.spaced())
+	_rec_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_rec_label.anchor_left = 0.0
+	_rec_label.anchor_right = 1.0
+	_rec_label.offset_top = 34
+	_rec_label.visible = false
+	root.add_child(_rec_label)
+
+	# Damage vignette.
+	_vignette = UiKit.full_rect(ColorRect.new()) as ColorRect
+	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vs := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = "shader_type canvas_item;\nuniform float amount = 0.0;\nvoid fragment() {\n\tvec2 d = UV - 0.5;\n\tfloat v = smoothstep(0.25, 0.75, length(d) * 1.3);\n\tCOLOR = vec4(0.9, 0.12, 0.25, v * amount);\n}\n"
+	vs.shader = sh
+	_vignette.material = vs
+	root.add_child(_vignette)
 
 	# --- Bottom-center: prompt ---
 	var pc := CenterContainer.new()
@@ -76,14 +108,30 @@ func _ready() -> void:
 	root.add_child(_flash)
 
 	Game.objective_changed.connect(_on_objective)
+	Game.progress_changed.connect(func(t: String) -> void:
+		_progress_label.text = t
+		_progress_label.visible = t != "")
+	if player and player.health:
+		player.health.damaged.connect(func(_a: float, _p: Vector3) -> void: _vig = 0.85)
 	Game.prompt_requested.connect(_on_prompt)
 	Game.player_respawned.connect(func() -> void: flash(Color(0.02, 0.1, 0.15), 0.6))
 	Game.checkpoint_reached.connect(func(_p: Vector3) -> void: _energy.pulse_glow())
 
 
-func _process(_d: float) -> void:
+func _process(delta: float) -> void:
 	if emitter:
 		_energy.charge = emitter.charge
+	if player and player.health:
+		_health.ratio = player.health.hp / player.health.max_hp
+	if _vig > 0.0:
+		_vig = maxf(_vig - delta * 1.6, 0.0)
+		(_vignette.material as ShaderMaterial).set_shader_parameter("amount", _vig)
+	if recorder and recorder.get("is_recording"):
+		var t: float = recorder.get("rec_time")
+		_rec_label.text = "●  REC ECHO   %.1f / 5s" % t
+		_rec_label.visible = true
+	else:
+		_rec_label.visible = false
 
 
 func _on_objective(text: String) -> void:
@@ -118,6 +166,31 @@ static func _place(c: Control, anchor: Vector2, r: Rect2) -> void:
 func flash(color: Color, time: float) -> void:
 	_flash.color = Color(color.r, color.g, color.b, 1.0)
 	create_tween().tween_property(_flash, "color:a", 0.0, time)
+
+
+class HealthBar extends Control:
+	var ratio := 1.0
+	var _shown := 1.0
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var l := UiKit.label("INTEGRITY", 12, Color(1, 1, 1, 0.8), UiKit.spaced())
+		l.position = Vector2(0, -2)
+		add_child(l)
+
+	func _process(delta: float) -> void:
+		_shown = move_toward(_shown, ratio, delta * 1.5)
+		queue_redraw()
+
+	func _draw() -> void:
+		var x0 := 96.0
+		var w := 240.0
+		var h := 8.0
+		var y := 4.0
+		draw_rect(Rect2(x0, y, w, h), Color(0.02, 0.1, 0.16, 0.7))
+		draw_rect(Rect2(x0, y, w * _shown, h), Color(1.0, 0.5, 0.55, 0.6))
+		var col := Color(0.95, 0.98, 1.0) if ratio > 0.35 else Color(1.0, 0.35, 0.4)
+		draw_rect(Rect2(x0, y, w * ratio, h), col)
 
 
 class Crosshair extends Control:

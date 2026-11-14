@@ -105,7 +105,8 @@ func _build_main() -> Control:
 
 	var v := _column(root, Vector2(110, -250))
 	v.add_child(UiKit.label("ECHO", 120, UiKit.TEXT, UiKit.wide()))
-	var sub := UiKit.label("SOUND  REVEALS  REALITY", 22, UiKit.CYAN, UiKit.spaced())
+	v.add_child(UiKit.label("THE  LAST  RESONANCE", 26, UiKit.TEXT, UiKit.spaced()))
+	var sub := UiKit.label("SOUND  REVEALS  REALITY", 18, UiKit.CYAN, UiKit.spaced())
 	v.add_child(sub)
 	var spacer := Control.new()
 	spacer.custom_minimum_size.y = 40
@@ -119,7 +120,7 @@ func _build_main() -> Control:
 	var quit := UiKit.button("✕   QUIT")
 	quit.pressed.connect(func() -> void: get_tree().quit())
 	v.add_child(quit)
-	var hint := UiKit.label("WASD move   ·   Mouse look   ·   Space jump   ·   Q / Right-click  Echo Pulse", 15, Color(1, 1, 1, 0.8))
+	var hint := UiKit.label("WASD move  ·  Space jump  ·  Q / RMB  Echo Scan  ·  LMB  Sonic Bolt  ·  F  Dash  ·  R  Record Echo Clone  ·  E  Interact", 15, Color(1, 1, 1, 0.85))
 	hint.anchor_top = 1.0
 	hint.anchor_bottom = 1.0
 	hint.offset_left = 110

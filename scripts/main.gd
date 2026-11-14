@@ -10,6 +10,7 @@ var player: Player
 var hud: Hud
 var menus: Menus
 var orbit_cam: Camera3D
+var recorder: EchoCloneRecorder
 var _t := 0.0
 var _qa := ""
 
@@ -74,8 +75,13 @@ func _start_play() -> void:
 	player.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(player)
 	player.global_position = Game.checkpoint_pos
+	recorder = EchoCloneRecorder.new()
+	recorder.player = player
+	player.add_child(recorder)
 	hud = Hud.new()
 	hud.emitter = player.emitter
+	hud.player = player
+	hud.recorder = recorder
 	add_child(hud)
 	menus.hide_all()
 	Game.running = true
@@ -287,20 +293,74 @@ func _qa_logic() -> void:
 	_check(bridge.all(func(p: EchoPlatform) -> bool: return not p.is_active()), "bridge deactivates after timeout", fails)
 	_teleport(Vector3(0, -30, -40), 0.0)
 	await _wait(0.5)
-	_check(player.global_position.y > -5.0, "fall respawns at checkpoint (pos %s)" % str(player.global_position), fails)
+	_check(player.global_position.y > -5.0 and player.global_position.distance_to(Vector3(-22.4, 0.0, -27.0)) < 1.0,
+		"fall respawns at the LAST checkpoint, relay islet (pos %s)" % str(player.global_position), fails)
 
-	# 7. Timed steps: pulse from B edge reveals first steps but not the last.
-	_teleport(Vector3(0, 0.2, -58.5), 0.0)
+	# 7. Combat on island B (player made invulnerable so the test is deterministic).
+	player.health.grant_iframes(999.0)
+	_teleport(ResonantCrossing.ISLAND_B + Vector3(0, 0.2, 4.0), 0.0)
+	await _wait(1.5)
+	var drones := level.drones
+	_check(drones.size() == 3, "3 Echo Drones on island B", fails)
+	_check(not level.surf.enabled, "surf generator dormant before combat", fails)
+	player.emitter.charge = 1.0
+	_check(player.emitter.try_fire(player.camera, player._muzzle()), "Sonic Bolt fires", fails)
+	for d in drones:
+		var tries := 0
+		while not d.is_defeated() and tries < 15:
+			var from := d.global_position + Vector3(0, 0.5, 3.0)
+			SonicBolt.fire(self, from, (d.global_position - from).normalized())
+			await _wait(0.3)
+			tries += 1
+	_check(drones.all(func(d: EchoDrone) -> bool: return d.is_defeated()), "all drones disabled by Sonic Bolts", fails)
+	await _wait(0.5)
+	_check(level.surf.enabled, "clearing drones activates the surf generator", fails)
+
+	# 8. Echo Surf B -> D.
+	level.surf.board(player)
+	var ride := 0.0
+	while level.surf.is_riding() and ride < 20.0:
+		await _wait(0.25)
+		ride += 0.25
+	await _wait(0.8)
+	_check(player.global_position.distance_to(ResonantCrossing.ISLAND_D) < 8.0 and player.global_position.y > 3.0,
+		"surf delivers player to island D in %.1fs (pos %s)" % [ride, str(player.global_position)], fails)
+
+	# 9. Clone puzzle: clone holds switch A while the player stands on B.
+	_check(not level.clone_gate.is_open, "clone gate starts locked", fails)
+	_teleport(level.switch_a.global_position + Vector3.UP * 0.2, 90.0)
+	await _wait(0.5)
+	recorder.start_recording()
+	await _wait(1.0)
+	recorder.stop_recording()
+	await _wait(0.6)
+	_teleport(level.switch_b.global_position + Vector3.UP * 0.2, 90.0)
+	await _wait(1.0)
+	_check(level.switch_a.is_pressed(), "clone keeps switch A pressed", fails)
+	_check(level.switch_b.is_pressed(), "player presses switch B", fails)
+	_check(level.clone_gate.is_open, "two switches open the temple gate", fails)
+
+	# 10. Resonance machine transforms the bridge; walk across it to the spire.
+	await _wait(2.5)
+	_check(not level.bridge.active, "bridge broken before machine", fails)
+	_teleport(ResonantCrossing.ISLAND_D + Vector3(-10.5, 0.2, -0.5), 90.0)
 	await _wait(0.5)
 	player.emitter.charge = 1.0
 	player.emitter.try_pulse()
-	await _wait(1.5)
-	var steps := _platforms_between(-79.0, -60.0)
-	_check(steps.size() == 5, "5 timed steps exist", fails)
-	if steps.size() == 5:
-		_check(steps[0].is_active() and not steps[4].is_active(), "first step revealed, last needs a 2nd pulse", fails)
+	await _wait(4.0)
+	_check(level.machine.activated, "echo activates the resonance machine", fails)
+	_check(level.bridge.active and level.bridge.is_settled(), "bridge transformed into place", fails)
+	_teleport(ResonantCrossing.ISLAND_D + Vector3(-12.0, 0.2, -0.5), 90.0)
+	await _wait(0.4)
+	Input.action_press("move_forward")
+	await _wait(2.2)
+	Input.action_release("move_forward")
+	await _wait(0.4)
+	_check(player.global_position.x < 9.0 and player.global_position.y > 3.0,
+		"walked across the bridge to the spire island (pos %s)" % str(player.global_position), fails)
 
-	# 8. Signal gate win.
+	# 11. Signal gate win + world restoration.
+	_check(not level.restoration.restored, "world starts corrupted", fails)
 	_teleport(Vector3(0, 4.2, -83), 0.0)
 	await _wait(0.5)
 	_check(not Game.won, "not won before reaching gate", fails)
@@ -309,6 +369,8 @@ func _qa_logic() -> void:
 	Input.action_release("move_forward")
 	await _wait(0.3)
 	_check(Game.won, "walking into Signal Gate wins (pos %s)" % str(player.global_position), fails)
+	await _wait(1.0)
+	_check(level.restoration.restored, "spire restoration transforms the world", fails)
 
 	print("QA_RESULT ", "PASS" if fails.is_empty() else "FAIL %s" % str(fails))
 	get_tree().quit(0 if fails.is_empty() else 1)

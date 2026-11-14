@@ -139,6 +139,8 @@ func _ready() -> void:
 	add_child(_light)
 
 	var area := Area3D.new()
+	area.collision_layer = 0
+	area.collision_mask = 2  # player
 	var col := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = Vector3(7, 6, 4)

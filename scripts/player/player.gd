@@ -23,10 +23,26 @@ var _arm_kick := 0.0
 var _base_fov := 75.0
 var _respawning := false
 var input_enabled := true
+var health: PlayerHealth
+var _dash_t := 0.0
+var _dash_dir := Vector3.ZERO
+var _shake := 0.0
+const DASH_SPEED := 17.0
+const DASH_TIME := 0.18
 
 
 func _ready() -> void:
 	add_to_group("player")
+	collision_layer = 2
+	collision_mask = 1
+	health = PlayerHealth.new()
+	add_child(health)
+	health.damaged.connect(func(_a: float, _p: Vector3) -> void:
+		_shake = 0.35
+		Sfx.play("hurt", -3.0))
+	health.died.connect(func() -> void:
+		respawn()
+		health.heal_full())
 	var col := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.38
@@ -53,6 +69,7 @@ func _ready() -> void:
 	emitter = EchoEmitter.new()
 	add_child(emitter)
 	emitter.pulsed.connect(_on_pulsed)
+	emitter.fired.connect(func() -> void: _arm_kick = maxf(_arm_kick, 0.45))
 
 	rotation.y = Game.checkpoint_yaw
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -121,6 +138,10 @@ func _physics_process(delta: float) -> void:
 			_jump_buffer = JUMP_BUFFER
 		if Input.is_action_just_pressed("pulse"):
 			emitter.try_pulse()
+		if Input.is_action_pressed("fire") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			emitter.try_fire(camera, _muzzle())
+		if Input.is_action_just_pressed("dash") and _dash_t <= 0.0:
+			_start_dash()
 		var iv := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 		dir = (transform.basis * Vector3(iv.x, 0, iv.y)).normalized()
 		sprinting = Input.is_action_pressed("sprint")
@@ -134,8 +155,14 @@ func _physics_process(delta: float) -> void:
 	var speed := SPRINT_SPEED if sprinting else WALK_SPEED
 	var accel := GROUND_ACCEL if is_on_floor() else AIR_ACCEL
 	var target := dir * speed
-	velocity.x = lerpf(velocity.x, target.x, clampf(accel * delta, 0.0, 1.0))
-	velocity.z = lerpf(velocity.z, target.z, clampf(accel * delta, 0.0, 1.0))
+	if _dash_t > 0.0:
+		_dash_t -= delta
+		velocity.x = _dash_dir.x * DASH_SPEED
+		velocity.z = _dash_dir.z * DASH_SPEED
+		velocity.y = maxf(velocity.y, 0.0)
+	else:
+		velocity.x = lerpf(velocity.x, target.x, clampf(accel * delta, 0.0, 1.0))
+		velocity.z = lerpf(velocity.z, target.z, clampf(accel * delta, 0.0, 1.0))
 	move_and_slide()
 
 	if global_position.y < FALL_LIMIT and not _respawning:
@@ -149,6 +176,9 @@ func _process(delta: float) -> void:
 		_bob_t += delta * hv * 1.6
 	var bob := sin(_bob_t) * 0.03 * clampf(hv / WALK_SPEED, 0.0, 1.0)
 	camera.position.y = bob
+	_shake = maxf(_shake - delta, 0.0)
+	camera.position.x = randf_range(-1.0, 1.0) * _shake * 0.08
+	camera.position.y += randf_range(-1.0, 1.0) * _shake * 0.08
 	_arm_kick = move_toward(_arm_kick, 0.0, delta * 3.0)
 	arm.position = Vector3(0.32, -0.30 + bob * 0.5, -0.55 - _arm_kick * 0.18)
 	arm.rotation = Vector3(deg_to_rad(8 + _arm_kick * 25.0), deg_to_rad(-12), deg_to_rad(-8))
@@ -170,6 +200,23 @@ func respawn() -> void:
 
 func _on_pulsed() -> void:
 	_arm_kick = 1.0
+
+
+func _muzzle() -> Vector3:
+	return camera.global_position - camera.global_basis.z * 0.6 + camera.global_basis.x * 0.25 - camera.global_basis.y * 0.2
+
+
+func _start_dash() -> void:
+	if not emitter.spend(EchoEmitter.DASH_COST):
+		return
+	var iv := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	_dash_dir = (transform.basis * Vector3(iv.x, 0, iv.y)).normalized()
+	if _dash_dir == Vector3.ZERO:
+		_dash_dir = -transform.basis.z
+	_dash_t = DASH_TIME
+	health.grant_iframes(0.35)
+	Sfx.play("dash", -4.0)
+	camera.fov += 8.0
 
 
 func _build_arm() -> Node3D:
