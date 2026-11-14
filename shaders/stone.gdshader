@@ -33,9 +33,10 @@ void vertex() {
 
 void fragment() {
 	vec3 n = normalize(wnorm);
+	// Perf: one fbm + cheap single-octave lookups (runs full-screen on iGPUs).
 	float big = fbm3(wpos * 0.18);
-	float fine = fbm3(wpos * 1.7);
-	vec3 col = mix(stone_dark, stone_light, smoothstep(0.25, 0.75, big * 0.7 + fine * 0.45));
+	float fine = vnoise(wpos * 1.7);
+	vec3 col = mix(stone_dark, stone_light, smoothstep(0.25, 0.75, big * 0.7 + fine * 0.35));
 
 	// Stone block seams (projected on the dominant axis).
 	float seam = 0.0;
@@ -49,16 +50,16 @@ void fragment() {
 		col *= 1.0 - seam * 0.35;
 	}
 	// Cracks.
-	float crack = smoothstep(0.018, 0.0, abs(fbm3(wpos * 0.9 + 7.0) - 0.5));
+	float crack = smoothstep(0.018, 0.0, abs(vnoise(wpos * 0.9 + 7.0) * 0.6 + big * 0.4 - 0.5));
 	col *= 1.0 - crack * 0.28;
 	// Subtle ambient-occlusion-like darkening toward the bottom of faces.
 	col *= 0.9 + 0.1 * smoothstep(-0.5, 0.6, n.y);
 
 	// Moss on upward faces and drips down the sides.
 	float up = smoothstep(0.35, 0.85, n.y);
-	float mossn = fbm3(wpos * 0.6 + 3.0);
-	float moss = up * smoothstep(1.0 - moss_amount, 1.05 - moss_amount * 0.6, mossn + fine * 0.25);
-	float drip = smoothstep(0.62, 0.8, fbm3(vec3(wpos.x * 1.3, wpos.y * 0.25, wpos.z * 1.3))) * (1.0 - up) * moss_amount;
+	float mossn = vnoise(wpos * 0.6 + 3.0) * 0.6 + big * 0.4;
+	float moss = up * smoothstep(1.0 - moss_amount, 1.05 - moss_amount * 0.6, mossn + fine * 0.2);
+	float drip = smoothstep(0.62, 0.8, vnoise(vec3(wpos.x * 1.3, wpos.y * 0.25, wpos.z * 1.3))) * (1.0 - up) * moss_amount;
 	moss = clamp(moss + drip * 0.8, 0.0, 1.0);
 	vec3 mcol = moss_color * (0.75 + 0.5 * fine);
 	col = mix(col, mcol, moss);

@@ -168,6 +168,13 @@ func _build_settings() -> Control:
 	fs.toggled.connect(func(on: bool) -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED))
 	v.add_child(fs)
+	var hq := CheckButton.new()
+	hq.text = "High quality graphics (SSAO, full resolution)"
+	hq.add_theme_font_override("font", UiKit.spaced())
+	hq.add_theme_font_size_override("font_size", 18)
+	hq.button_pressed = Game.quality == "quality"
+	hq.toggled.connect(func(on: bool) -> void: Game.set_quality("quality" if on else "performance"))
+	v.add_child(hq)
 	var back := UiKit.button("←   BACK")
 	back.pressed.connect(func() -> void:
 		_only(_settings_back_to))
@@ -181,7 +188,20 @@ func _open_settings(from: Control) -> void:
 
 
 func _build_victory() -> Control:
-	var root := _base(0.35)
+	var root := _base(0.0)
+	var grad := TextureRect.new()
+	var gt := GradientTexture2D.new()
+	var g := Gradient.new()
+	g.set_color(0, Color(0.01, 0.06, 0.11, 0.88))
+	g.set_color(1, Color(0.01, 0.06, 0.11, 0.0))
+	gt.gradient = g
+	gt.fill_to = Vector2(1, 0)
+	grad.texture = gt
+	grad.anchor_bottom = 1.0
+	grad.offset_right = 1250
+	grad.stretch_mode = TextureRect.STRETCH_SCALE
+	grad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(grad)
 	var v := _column(root, Vector2(110, -200))
 	v.add_child(UiKit.label("SIGNAL RESTORED", 72, UiKit.TEXT, UiKit.wide()))
 	v.add_child(UiKit.label("The ancient gate sings again.", 24, UiKit.CYAN))

@@ -21,6 +21,8 @@ func _ready() -> void:
 	_build_environment()
 	_build_layout()
 	_build_background()
+	apply_quality(Game.quality)
+	Game.quality_changed.connect(apply_quality)
 
 
 func _build_environment() -> void:
@@ -180,17 +182,16 @@ func _build_background() -> void:
 	clouds.position = Vector3(0, -38, -60)
 	clouds.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(clouds)
-	var clouds2 := clouds.duplicate() as MeshInstance3D
-	clouds2.position.y = -48
-	add_child(clouds2)
 
-	# Distant floating islands with ruins.
-	for i in 34:
+	# Distant floating islands with ruins (no grass/vines/shadows: perf).
+	var bg := Node3D.new()
+	add_child(bg)
+	for i in 28:
 		var a := randf_range(-PI, PI)
 		var d := randf_range(70.0, 260.0)
 		var center := Vector3(sin(a) * d, randf_range(-18.0, 35.0), -60.0 + cos(a) * d)
 		var r := randf_range(4.0, 16.0)
-		var isl := Builders.island(self, center, r, r * randf_range(1.2, 2.2), false, d < 140.0)
+		var isl := Builders.island(bg, center, r, r * randf_range(1.2, 2.2), false, false)
 		if randf() < 0.7:
 			for k in randi_range(1, 3):
 				var off := Vector3(randf_range(-r, r) * 0.5, 0, randf_range(-r, r) * 0.5)
@@ -198,12 +199,14 @@ func _build_background() -> void:
 		if randf() < 0.3:
 			Builders.arch(isl, Vector3.ZERO, r * 0.6, r * 0.6, randf() * TAU, false)
 		if randf() < 0.35 and d < 180.0:
-			Builders.waterfall(self, center + Vector3(r * 0.97, -0.3, 0), r * 0.3, 40.0, deg_to_rad(90))
+			Builders.waterfall(bg, center + Vector3(r * 0.97, -0.3, 0), r * 0.3, 40.0, deg_to_rad(90))
+	_no_shadows(bg)
 
 	# Tall spires behind the Signal Gate.
 	for i in 9:
 		var p := Vector3(randf_range(-70, 70), -30, randf_range(-170, -260))
 		var sp := MeshInstance3D.new()
+		sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var cyl := CylinderMesh.new()
 		var w := randf_range(4.0, 9.0)
 		cyl.top_radius = w * 0.5
@@ -222,6 +225,29 @@ func _build_background() -> void:
 		var c := Vector3(sin(a) * 520.0, randf_range(10.0, 70.0), -60.0 - cos(a) * 520.0)
 		var r := randf_range(35.0, 60.0)
 		Builders.island(self, c, r, r * 1.6, false, false)
+
+
+func _no_shadows(n: Node) -> void:
+	if n is GeometryInstance3D:
+		(n as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for c in n.get_children():
+		_no_shadows(c)
+
+
+## Applies a graphics preset. "performance" targets integrated GPUs.
+func apply_quality(q: String) -> void:
+	var high := q == "quality"
+	env.ssao_enabled = high
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if high else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_max_distance = 120.0 if high else 55.0
+	var vp := get_viewport()
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
+	vp.scaling_3d_scale = 1.0 if high else 0.67
+	vp.msaa_3d = Viewport.MSAA_2X if high else Viewport.MSAA_DISABLED
+	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED if high else Viewport.SCREEN_SPACE_AA_FXAA
+	RenderingServer.directional_soft_shadow_filter_set_quality(
+		RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM if high else RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW)
+	RenderingServer.directional_shadow_atlas_set_size(4096 if high else 2048, true)
 
 
 func _echo_platform(pos: Vector3, size: Vector3) -> EchoPlatform:

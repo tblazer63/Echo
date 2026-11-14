@@ -82,6 +82,7 @@ static func button(text: String) -> Button:
 	b.add_theme_stylebox_override("focus", hover)
 	b.add_theme_stylebox_override("pressed", hover)
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	b.mouse_entered.connect(func() -> void: Sfx.play("ui", -10.0))
 	b.pressed.connect(func() -> void: Sfx.play("ui", -4.0, 1.3))
 	return b

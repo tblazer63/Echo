@@ -211,18 +211,24 @@ static func vines(parent: Node3D, radius: float, count: int) -> void:
 		_vine_mat = StandardMaterial3D.new()
 		_vine_mat.albedo_color = Color(0.28, 0.5, 0.18)
 		_vine_mat.roughness = 0.9
+	# One MultiMesh per island (1 draw call) instead of one node per vine.
+	var unit := BoxMesh.new()
+	unit.size = Vector3(1, 1, 0.12)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = unit
+	mm.instance_count = count
 	for i in count:
 		var a := randf() * TAU
 		var len := randf_range(1.0, 4.5)
-		var v := MeshInstance3D.new()
-		var b := BoxMesh.new()
-		b.size = Vector3(randf_range(0.12, 0.35), len, 0.12)
-		v.mesh = b
-		v.material_override = _vine_mat
-		v.position = Vector3(cos(a) * radius * 0.985, -len * 0.5 + 0.02, sin(a) * radius * 0.985)
-		v.rotation.y = -a
-		v.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		parent.add_child(v)
+		var basis := Basis(Vector3.UP, -a).scaled(Vector3(randf_range(0.12, 0.35), len, 1.0))
+		var pos := Vector3(cos(a) * radius * 0.985, -len * 0.5 + 0.02, sin(a) * radius * 0.985)
+		mm.set_instance_transform(i, Transform3D(basis, pos))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = _vine_mat
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mmi)
 
 
 static func waterfall(parent: Node3D, top: Vector3, width: float, height: float, facing: float) -> void:

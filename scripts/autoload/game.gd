@@ -19,11 +19,29 @@ var running: bool = false
 ## Set by main.gd before a reload: "menu" or "play".
 var start_mode: String = "menu"
 var shown_prompts: Dictionary = {}
+## "quality" or "performance". Auto: performance on integrated GPUs.
+var quality: String = "quality"
+
+signal quality_changed(q: String)
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_input()
+	var gpu := RenderingServer.get_video_adapter_name().to_lower()
+	var integrated := RenderingServer.get_video_adapter_type() == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU
+	# D3D12 often reports iGPUs as "other": fall back to common iGPU names.
+	for hint in ["radeon(tm) graphics", "radeon graphics", "vega", "intel(r) uhd", "intel(r) iris", "intel(r) arc(tm) graphics", "uhd graphics", "iris"]:
+		if gpu.contains(hint):
+			integrated = true
+	if integrated:
+		quality = "performance"
+	print("ECHO: GPU=%s quality=%s" % [RenderingServer.get_video_adapter_name(), quality])
+
+
+func set_quality(q: String) -> void:
+	quality = q
+	quality_changed.emit(q)
 
 
 func _process(delta: float) -> void:

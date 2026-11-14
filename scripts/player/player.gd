@@ -56,6 +56,43 @@ func _ready() -> void:
 
 	rotation.y = Game.checkpoint_yaw
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_add_motes()
+
+
+## Drifting light motes around the player for atmosphere.
+func _add_motes() -> void:
+	var p := CPUParticles3D.new()
+	p.amount = 70
+	p.lifetime = 6.0
+	p.preprocess = 6.0
+	p.local_coords = false
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(14, 5, 14)
+	p.direction = Vector3.UP
+	p.spread = 180.0
+	p.gravity = Vector3(0, 0.05, 0)
+	p.initial_velocity_min = 0.05
+	p.initial_velocity_max = 0.3
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.2
+	var curve := Curve.new()
+	curve.add_point(Vector2(0, 0))
+	curve.add_point(Vector2(0.2, 1))
+	curve.add_point(Vector2(0.8, 1))
+	curve.add_point(Vector2(1, 0))
+	p.scale_amount_curve = curve
+	var q := QuadMesh.new()
+	q.size = Vector2(0.05, 0.05)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.albedo_color = Color(0.7, 1.0, 1.0, 0.8)
+	q.material = m
+	p.mesh = q
+	p.position.y = 2.0
+	add_child(p)
 
 
 func _unhandled_input(event: InputEvent) -> void:

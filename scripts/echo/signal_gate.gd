@@ -37,27 +37,39 @@ func _ready() -> void:
 	_outer = Node3D.new()
 	_outer.position.y = 7.0
 	add_child(_outer)
+	# Ring blocks + runes as two MultiMeshes (2 draw calls instead of 40).
 	var seg := 22
+	var slots: Array[int] = []
 	for i in seg:
-		if i == 5 or i == 16:
-			continue  # broken gaps like the concept art
-		var a := TAU * i / seg
-		var blk := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(1.55, 1.1, 1.3)
-		blk.mesh = bm
-		blk.material_override = stone
-		blk.position = Vector3(cos(a), sin(a), 0) * 6.2
-		blk.rotation.z = a + PI * 0.5
-		_outer.add_child(blk)
-		var rune := MeshInstance3D.new()
-		var rm := BoxMesh.new()
-		rm.size = Vector3(0.18, 0.5, 0.06)
-		rune.mesh = rm
-		rune.material_override = _rune_mat
-		rune.position = blk.position + Vector3(0, 0, 0.66)
-		rune.rotation.z = blk.rotation.z
-		_outer.add_child(rune)
+		if i != 5 and i != 16:  # broken gaps like the concept art
+			slots.append(i)
+	var bm := BoxMesh.new()
+	bm.size = Vector3(1.55, 1.1, 1.3)
+	var rm := BoxMesh.new()
+	rm.size = Vector3(0.18, 0.5, 0.06)
+	var blocks := MultiMesh.new()
+	blocks.transform_format = MultiMesh.TRANSFORM_3D
+	blocks.mesh = bm
+	blocks.instance_count = slots.size()
+	var runes := MultiMesh.new()
+	runes.transform_format = MultiMesh.TRANSFORM_3D
+	runes.mesh = rm
+	runes.instance_count = slots.size()
+	for k in slots.size():
+		var a := TAU * slots[k] / seg
+		var b := Basis(Vector3.BACK, a + PI * 0.5)
+		var p := Vector3(cos(a), sin(a), 0) * 6.2
+		blocks.set_instance_transform(k, Transform3D(b, p))
+		runes.set_instance_transform(k, Transform3D(b, p + Vector3(0, 0, 0.66)))
+	var bmi := MultiMeshInstance3D.new()
+	bmi.multimesh = blocks
+	bmi.material_override = stone
+	_outer.add_child(bmi)
+	var rmi := MultiMeshInstance3D.new()
+	rmi.multimesh = runes
+	rmi.material_override = _rune_mat
+	rmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_outer.add_child(rmi)
 
 	# Inner glowing ring.
 	_inner = Node3D.new()

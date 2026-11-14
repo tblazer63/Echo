@@ -28,9 +28,29 @@ func _ready() -> void:
 	wind.loop_end = int(6.0 * RATE)
 	_ambient = AudioStreamPlayer.new()
 	_ambient.stream = wind
-	_ambient.volume_db = -14.0
+	_ambient.volume_db = -16.0
 	add_child(_ambient)
 	_ambient.play()
+	# Soft ambient pad. All partials are multiples of 1/8 Hz so the 8 s loop is seamless.
+	var pad := _make(8.0, _pad_sample)
+	pad.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	pad.loop_end = int(8.0 * RATE)
+	var music := AudioStreamPlayer.new()
+	music.stream = pad
+	music.volume_db = -13.0
+	add_child(music)
+	music.play()
+
+
+func _pad_sample(t: float, d: float) -> float:
+	# A2, E3, B3, C#4, F#4 (rounded to 1/8 Hz) with slow swells.
+	var freqs := [110.0, 164.875, 247.0, 277.125, 370.0]
+	var v := 0.0
+	for i in freqs.size():
+		var swell := 0.55 + 0.45 * sin(TAU * t / d * (1.0 + (i % 2)) + i * 1.3)
+		v += sin(TAU * freqs[i] * t) * swell * (0.12 if i == 0 else 0.07)
+		v += sin(TAU * freqs[i] * 2.0 * t) * swell * 0.015
+	return v
 
 
 func play(sound: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:

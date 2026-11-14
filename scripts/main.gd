@@ -108,9 +108,24 @@ func _set_paused(p: bool) -> void:
 
 func _on_won() -> void:
 	player.input_enabled = false
+	player.velocity = Vector3.ZERO
 	hud.flash(Color(0.85, 1, 1), 2.0)
 	Game.set_objective("Signal restored")
-	await get_tree().create_timer(3.5).timeout
+	# Cinematic: step back and look up at the restored gate.
+	var gate_center := level.signal_gate.global_position + Vector3.UP * 7.0
+	var back := Vector3(gate_center.x, player.global_position.y, gate_center.z + 13.0)
+	var eye := back + Vector3.UP * 1.62
+	var to := gate_center - eye
+	var yaw := atan2(-to.x, -to.z)
+	var pitch := atan2(to.y, Vector2(to.x, to.z).length())
+	player.set_physics_process(false)
+	var tw := create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(player, "global_position", back, 3.0)
+	tw.tween_property(player, "rotation:y", yaw, 3.0)
+	tw.tween_property(player.head, "rotation:x", pitch, 3.0)
+	player.arm.visible = false
+	await get_tree().create_timer(3.6).timeout
+	hud.visible = false
 	menus.show_victory(Game.format_time(Game.run_time))
 
 
@@ -125,7 +140,8 @@ func _shot(dir: String, name: String) -> void:
 	var img := get_viewport().get_texture().get_image()
 	var path := dir.path_join(name)
 	img.save_png(path)
-	print("QA_SHOT ", path)
+	print("QA_SHOT %s  fps=%d  draw_calls=%d" % [path, Engine.get_frames_per_second(),
+		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)])
 
 
 func _teleport(pos: Vector3, yaw_deg: float, pitch_deg: float = 0.0) -> void:
@@ -144,6 +160,36 @@ func _run_qa() -> void:
 		await _qa_shots(_qa.substr(6))
 	elif _qa == "logic":
 		await _qa_logic()
+	elif _qa.begins_with("perf"):
+		await _qa_perf()
+
+
+## Stable perf measurement: settle, then average over a window per viewpoint.
+func _qa_perf() -> void:
+	var spots := [
+		["start", Vector3(0, 0.2, 3), 0.0],
+		["hub", Vector3(0, 0.2, -22), 0.0],
+		["steps", Vector3(0, 0.2, -55), 0.0],
+		["gate", Vector3(0, 4.2, -80), 0.0],
+	]
+	await _wait(4.0)
+	for s in spots:
+		_teleport(s[1], s[2], 0.0)
+		await _wait(2.5)  # let shaders compile / caches warm
+		var frames := 0
+		var t0 := Time.get_ticks_usec()
+		var proc := 0.0
+		var phys := 0.0
+		while Time.get_ticks_usec() - t0 < 3_000_000:
+			await get_tree().process_frame
+			frames += 1
+			proc += Performance.get_monitor(Performance.TIME_PROCESS)
+			phys += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+		var secs := (Time.get_ticks_usec() - t0) / 1_000_000.0
+		print("QA_PERF %-6s fps=%.1f  cpu_process=%.1fms  cpu_physics=%.1fms  draw_calls=%d  quality=%s" % [
+			s[0], frames / secs, proc / frames * 1000.0, phys / frames * 1000.0,
+			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Game.quality])
+	get_tree().quit()
 
 
 func _qa_shots(dir: String) -> void:
@@ -159,7 +205,7 @@ func _qa_shots(dir: String) -> void:
 	player.emitter.try_pulse()
 	await _wait(0.6)
 	await _shot(dir, "04_hub_pulse.png")
-	_teleport(Vector3(-20.5, 0.2, -23.5), 50.0, 8.0)
+	_teleport(Vector3(-21.5, 0.2, -25.0), 75.0, 6.0)
 	await _wait(1.3)
 	player.emitter.try_pulse()
 	await _wait(1.0)
@@ -189,8 +235,11 @@ func _check(ok: bool, what: String, fails: Array) -> void:
 
 func _qa_logic() -> void:
 	var fails: Array = []
-	await _wait(2.5)
-	_check(player.is_on_floor() and player.global_position.y > -0.2, "player spawns on floor (pos %s)" % str(player.global_position), fails)
+	var waited := 0.0
+	while not player.is_on_floor() and waited < 6.0:
+		await _wait(0.1)
+		waited += 0.1
+	_check(player.is_on_floor() and player.global_position.y > -0.2, "player spawns on floor (pos %s, %.1fs)" % [str(player.global_position), waited], fails)
 
 	# 1. Bridge hidden before pulse: walking forward should NOT be possible yet.
 	var bridge := _platforms_between(-20.0, -6.0)
