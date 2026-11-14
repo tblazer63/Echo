@@ -4,7 +4,7 @@ extends AnimatableBody3D
 ## tick, then holds the final pose forever (so it can keep a switch pressed).
 
 const REVEAL_SHADER := preload("res://shaders/reveal.gdshader")
-const REVEAL := 0.85
+const REVEAL := 1.0
 
 var frames: Array = []
 var holding := false
@@ -101,6 +101,17 @@ func _ready() -> void:
 	_ring.position.y = 0.04
 	_ring.scale = Vector3(1, 0.3, 1)
 	add_child(_ring)
+	# Floating marker so the echo is easy to find.
+	var tag := Label3D.new()
+	tag.text = "ECHO"
+	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	tag.font_size = 40
+	tag.pixel_size = 0.006
+	tag.outline_size = 10
+	tag.modulate = Game.ECHO_CYAN
+	tag.outline_modulate = Color(0.02, 0.1, 0.14, 0.9)
+	tag.position.y = 2.25
+	add_child(tag)
 
 
 func _capsule(r: float, h: float) -> CapsuleMesh:

@@ -186,8 +186,13 @@ func _process(delta: float) -> void:
 	camera.fov = lerpf(camera.fov, target_fov, clampf(delta * 6.0, 0.0, 1.0))
 
 
+func add_shake(strength: float) -> void:
+	_shake = maxf(_shake, strength)
+
+
 func respawn() -> void:
 	_respawning = true
+	Game.deaths += 1
 	Sfx.play("respawn", -4.0)
 	velocity = Vector3.ZERO
 	global_position = Game.checkpoint_pos

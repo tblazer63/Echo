@@ -38,6 +38,9 @@ func _ready() -> void:
 	_streams["shatter"] = _make(0.8, _shatter_sample)
 	_streams["restore"] = _make(4.0, _restore_sample)
 	_streams["dash"] = _make(0.25, _dash_sample)
+	_streams["shard"] = _make(0.5, _shard_sample)
+	_streams["obstacle"] = _make(0.4, _obstacle_sample)
+	_streams["kill"] = _make(0.5, _kill_sample)
 	var wind := _make(6.0, _wind_sample)
 	wind.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	wind.loop_end = int(6.0 * RATE)
@@ -156,6 +159,25 @@ func _restore_sample(t: float, _d: float) -> float:
 		if t >= st:
 			v += sin(TAU * chord[i] * (t - st)) * _env(t - st, 0.4, 1.8) * 0.09
 	return v
+
+
+func _shard_sample(t: float, _d: float) -> float:
+	var notes := [1046.5, 1318.5, 1568.0, 2093.0]
+	var i := mini(int(t / 0.07), 3)
+	var lt := t - i * 0.07
+	return sin(TAU * notes[i] * t) * _env(lt, 0.003, 0.12) * 0.22
+
+
+func _obstacle_sample(t: float, _d: float) -> float:
+	_lp = lerpf(_lp, randf_range(-1.0, 1.0), 0.3)
+	var f := lerpf(500.0, 150.0, t / 0.4)
+	return (sin(TAU * f * t) * 0.4 + _lp * 0.4) * _env(t, 0.003, 0.12)
+
+
+func _kill_sample(t: float, _d: float) -> float:
+	_lp = lerpf(_lp, randf_range(-1.0, 1.0), 0.5)
+	var f := lerpf(900.0, 1800.0, minf(t / 0.15, 1.0))
+	return (_lp * 0.45 * _env(t, 0.002, 0.1) + sin(TAU * f * t) * 0.18 * _env(t, 0.01, 0.15))
 
 
 func _dash_sample(t: float, _d: float) -> float:

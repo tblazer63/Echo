@@ -303,6 +303,10 @@ func echo_point() -> Vector3:
 	return global_position
 
 
+func is_exposed() -> bool:
+	return _expose_t > 0.0 and not shield_up
+
+
 func on_echo(_origin: Vector3, wave: Node) -> void:
 	if _defeated or not active:
 		return

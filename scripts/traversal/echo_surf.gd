@@ -7,6 +7,8 @@ extends Node3D
 signal boarded
 signal ring_collected(count: int, total: int)
 signal finished(collected: int, total: int)
+signal obstacle_hit(penalty_total: float)
+signal time_trial(final: float, best: float, is_new_best: bool)
 
 const SURF_SHADER := preload("res://shaders/surf_wave.gdshader")
 const TRACK_WIDTH := 4.5
@@ -19,10 +21,21 @@ const DORMANT_ENERGY := 0.15
 const ACTIVE_ENERGY := 1.0
 const RIDE_ENERGY := 1.6
 const DIM := Color(0.38, 0.4, 0.43)
+const CORRUPT := Color(0.95, 0.25, 0.85)
+const ORB_RADIUS := 1.3
+const ORB_PENALTY := 2.0
+
+## Best surf times, keyed per level + track so different courses never share one.
+## Static, so they survive scene reloads.
+static var _bests: Dictionary = {}
 
 ## World-space control points: first = generator (island B), last = landing (island D).
 var points: PackedVector3Array = PackedVector3Array()
 var ring_count := 8
+var obstacle_count := 0
+var ride_time := 0.0
+var penalty := 0.0
+var best_time := -1.0
 var enabled := false
 var riding := false
 var collected := 0
@@ -52,6 +65,13 @@ var _speed := 0.0
 var _lat := 0.0
 var _lat_vel := 0.0
 var _t := 0.0
+var _orbs: Array[Node3D] = []
+var _orb_spin: Array[MeshInstance3D] = []
+var _orb_pos: PackedVector3Array = PackedVector3Array()
+var _orb_live: Array[bool] = []
+var _ring_ever: Array[bool] = []
+var _best_key := ""
+var _last_progress := ""
 
 
 func _ready() -> void:
@@ -62,9 +82,12 @@ func _ready() -> void:
 	_build_track()
 	_build_generator()
 	_build_rings()
+	_build_obstacles()
 	_build_landing()
 	_build_spray()
 	Game.player_respawned.connect(abort)
+	_best_key = "%d:%.1f" % [Game.level_id, _length]
+	best_time = float(_bests.get(_best_key, -1.0))
 
 
 # ---------------------------------------------------------------- building
@@ -247,6 +270,78 @@ func _build_rings() -> void:
 		_rings.append(m)
 		_ring_pos.append(pos)
 		_ring_live.append(false)
+		_ring_ever.append(false)
+
+
+func _build_obstacles() -> void:
+	if obstacle_count <= 0:
+		return
+	var mat := _glow_mat(CORRUPT, 2.2)
+	var sph := SphereMesh.new()
+	sph.radius = 0.7
+	sph.height = 1.4
+	sph.radial_segments = 12
+	sph.rings = 6
+	var tor := TorusMesh.new()
+	tor.inner_radius = 0.85
+	tor.outer_radius = 1.0
+	tor.rings = 16
+	tor.ring_segments = 6
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = 0.16
+	cone.height = 0.55
+	cone.radial_segments = 5
+	cone.rings = 1
+	var spike_rot: Array[Vector3] = [Vector3.ZERO, Vector3(PI, 0, 0), Vector3(0, 0, PI * 0.5), Vector3(0, 0, -PI * 0.5), Vector3(PI * 0.5, 0, 0), Vector3(-PI * 0.5, 0, 0)]
+	var lanes: Array[float] = [-1.6, 1.6, 0.0]
+	for i in obstacle_count:
+		var f := 0.52 if obstacle_count == 1 else 0.2 + 0.65 * float(i) / float(obstacle_count - 1)
+		var d := _length * f
+		var t := _tangent(d)
+		var r := _right(t)
+		var lane: float = lanes[i % 3]
+		var jitter := 0.35 if int(float(i) / 3.0) % 2 == 0 else -0.35
+		var lat := clampf(lane + (jitter if lane != 0.0 else 0.0), -MAX_LATERAL, MAX_LATERAL)
+		var pos := _sample(d) + r * lat + Vector3.UP * 1.0
+		var root := Node3D.new()
+		root.position = pos
+		root.visible = false
+		add_child(root)
+		var core := MeshInstance3D.new()
+		core.mesh = sph
+		core.material_override = mat
+		core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(core)
+		for rot: Vector3 in spike_rot:
+			var sp := MeshInstance3D.new()
+			sp.mesh = cone
+			sp.material_override = mat
+			sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var b := Basis.from_euler(rot)
+			sp.transform = Transform3D(b, b * Vector3(0, 0.8, 0))
+			core.add_child(sp)
+		var ring := MeshInstance3D.new()
+		ring.mesh = tor
+		ring.material_override = mat
+		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ring.rotation.x = deg_to_rad(65)
+		root.add_child(ring)
+		_orbs.append(root)
+		_orb_spin.append(core)
+		_orb_pos.append(pos)
+		_orb_live.append(false)
+
+
+func _show_orbs() -> void:
+	for i in _orbs.size():
+		_orb_live[i] = true
+		var o := _orbs[i]
+		o.visible = true
+		o.scale = Vector3.ONE * 0.01
+		var tw := o.create_tween()
+		tw.tween_interval(0.4 + 0.12 * i)
+		tw.tween_property(o, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _build_landing() -> void:
@@ -322,6 +417,7 @@ func activate() -> void:
 		var tw := m.create_tween()
 		tw.tween_interval(0.3 + 0.15 * i)
 		tw.tween_property(m, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_show_orbs()
 
 
 func is_riding() -> bool:
@@ -334,6 +430,10 @@ func board(player: Player) -> void:
 	_rider = player
 	riding = true
 	_dist = 0.0
+	ride_time = 0.0
+	penalty = 0.0
+	collected = 0
+	_reset_course()
 	_speed = START_SPEED
 	var p0 := _sample(0.0)
 	_lat = clampf((player.global_position - to_global(p0)).dot(global_basis * _right(_tangent(0.0))), -MAX_LATERAL, MAX_LATERAL)
@@ -346,6 +446,22 @@ func board(player: Player) -> void:
 	boarded.emit()
 
 
+## Restores rings and orbs taken on a previous ride (only once activated).
+func _reset_course() -> void:
+	if not enabled:
+		return
+	for i in _rings.size():
+		if not _ring_live[i]:
+			_ring_live[i] = true
+			_rings[i].visible = true
+			_rings[i].scale = Vector3.ONE
+	for i in _orbs.size():
+		if not _orb_live[i]:
+			_orb_live[i] = true
+			_orbs[i].visible = true
+			_orbs[i].scale = Vector3.ONE
+
+
 ## Ends a ride in place without emitting `finished` (e.g. player death/respawn).
 func abort() -> void:
 	if not riding:
@@ -356,6 +472,7 @@ func abort() -> void:
 		_rider.camera.rotation.z = 0.0
 		_rider.set_physics_process(true)
 	_rider = null
+	_set_ride_progress("")
 
 
 # ---------------------------------------------------------------- runtime
@@ -379,6 +496,10 @@ func _process(delta: float) -> void:
 	# own axis would be invisible).
 	_gen_ring.rotate_y(delta * lerpf(0.3, 3.0, k))
 	_gen_core.position.y = _gen_ring.position.y + sin(_t * 2.0) * 0.08 * (0.3 + k)
+	for i in _orbs.size():
+		if _orbs[i].visible:
+			_orb_spin[i].rotate_y(delta * 1.4)
+			_orb_spin[i].position.y = sin(_t * 2.2 + float(i)) * 0.12
 
 	if enabled and _player_near and not riding:
 		_prompt_cd -= delta
@@ -398,6 +519,7 @@ func _physics_process(delta: float) -> void:
 		riding = false
 		_spray.emitting = false
 		return
+	ride_time += delta
 	_speed = lerpf(_speed, MAX_SPEED, clampf(delta * 0.9, 0.0, 1.0))
 	_dist += _speed * delta
 	if _dist >= _length:
@@ -427,6 +549,24 @@ func _physics_process(delta: float) -> void:
 	for i in _rings.size():
 		if _ring_live[i] and chest.distance_to(_ring_pos[i]) < RING_RADIUS:
 			_collect(i)
+	for i in _orbs.size():
+		if _orb_live[i] and chest.distance_to(_orb_pos[i]) < ORB_RADIUS:
+			_hit_orb(i)
+	_set_ride_progress("Surf  %.1fs   Rings %d/%d" % [ride_time + penalty, collected, _rings.size()])
+
+
+## Pushes HUD progress text only when it changes (every 0.1 s, not every frame).
+func _set_ride_progress(text: String) -> void:
+	if text == _last_progress:
+		return
+	_last_progress = text
+	Game.set_progress(text)
+
+
+## Clears the end-of-ride result line unless something else replaced it.
+func _clear_result(text: String) -> void:
+	if Game.progress == text:
+		_set_ride_progress("")
 
 
 func _collect(i: int) -> void:
@@ -438,7 +578,27 @@ func _collect(i: int) -> void:
 	tw.tween_property(m, "scale", Vector3.ONE * 0.01, 0.18)
 	tw.tween_callback(m.hide)
 	Sfx.play("ring", -2.0, 1.0 + 0.06 * collected)
-	ring_collected.emit(collected, _rings.size())
+	# Rings respawn on a re-ride; signal only each ring's first pickup so level
+	# listeners (Game.rings += 1) cannot push the score past rings_total.
+	if not _ring_ever[i]:
+		_ring_ever[i] = true
+		ring_collected.emit(collected, _rings.size())
+
+
+func _hit_orb(i: int) -> void:
+	_orb_live[i] = false
+	penalty += ORB_PENALTY
+	_speed *= 0.65
+	var o := _orbs[i]
+	var tw := o.create_tween()
+	tw.tween_property(o, "scale", Vector3.ONE * 1.6, 0.1)
+	tw.tween_property(o, "scale", Vector3.ONE * 0.01, 0.15)
+	tw.tween_callback(o.hide)
+	Sfx.play("obstacle")
+	if is_instance_valid(_rider) and _rider.has_method("add_shake"):
+		_rider.call("add_shake", 0.4)
+	Game.prompt("Dissonance hit!  +%.0fs" % ORB_PENALTY, 1.2)
+	obstacle_hit.emit(penalty)
 
 
 func _dismount() -> void:
@@ -455,5 +615,20 @@ func _dismount() -> void:
 		r.camera.rotation.z = 0.0
 		r.set_physics_process(true)
 	var total := _rings.size()
+	var final := ride_time + penalty
+	var prev_best := float(_bests.get(_best_key, -1.0))
+	var is_new := prev_best < 0.0 or final < prev_best
+	if is_new:
+		_bests[_best_key] = final
+	best_time = final if is_new else prev_best
+	var line: String = "Surf time %.1fs (best %.1fs)%s   Rings %d / %d" % [final, best_time, "  NEW BEST!" if is_new else "", collected, total]
+	# Prompt BEFORE `finished` so a level hint shown from `finished` (single
+	# prompt slot) is not clobbered. The result also stays on the progress line
+	# for a few seconds unless a listener replaces it.
+	Game.prompt(line, 5.0)
+	_set_ride_progress(line)
+	var tw := create_tween()
+	tw.tween_interval(6.0)
+	tw.tween_callback(_clear_result.bind(line))
+	time_trial.emit(final, best_time, is_new)
 	finished.emit(collected, total)
-	Game.prompt("Rings collected: %d / %d" % [collected, total], 4.0)

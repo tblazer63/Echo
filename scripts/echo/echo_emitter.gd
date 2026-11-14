@@ -77,6 +77,7 @@ func try_fire(cam: Camera3D, muzzle: Vector3) -> bool:
 	var hit := space.intersect_ray(q)
 	var target: Vector3 = hit.position if hit else cam.global_position + dir * 120.0
 	SonicBolt.fire(get_tree().current_scene, muzzle, (target - muzzle).normalized())
+	Juice.muzzle_flash(cam, Vector3(0.25, -0.2, -0.65))
 	Sfx.play("bolt", -6.0, randf_range(0.95, 1.08))
 	fired.emit()
 	return true

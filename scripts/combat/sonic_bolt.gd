@@ -112,7 +112,10 @@ func _impact(hit: Dictionary) -> void:
 	var depth := 0
 	while n != null and depth < 4:
 		if n.has_method("take_damage"):
+			var crit: bool = n.has_method("is_exposed") and bool(n.call("is_exposed"))
 			n.call("take_damage", DAMAGE, pos)
+			if n.is_in_group("drone") or n.is_in_group("boss"):
+				Juice.damage_number(get_tree().current_scene, pos, DAMAGE * (2.0 if crit else 1.0), crit)
 			enemy = true
 			break
 		n = n.get_parent()

@@ -10,6 +10,42 @@ signal player_respawned
 signal progress_changed(text: String)
 
 var progress: String = ""
+## Which level to build (1 = Resonant Crossing, 2 = Dissonant Heights).
+var level_id: int = 1
+const LEVEL_NAMES := ["", "THE FIRST RESONANCE", "DISSONANT HEIGHTS"]
+# Run stats for the victory screen.
+var shards: int = 0
+var shards_total: int = 0
+var rings: int = 0
+var rings_total: int = 0
+var deaths: int = 0
+var drones_down: int = 0
+signal shards_changed(n: int, total: int)
+
+
+func collect_shard() -> void:
+	shards += 1
+	shards_changed.emit(shards, shards_total)
+	prompt("Energy Shard  %d / %d" % [shards, shards_total], 2.0)
+
+
+## 0..100 score and letter rank for the victory screen.
+func rank() -> Dictionary:
+	var s := 0.0
+	if shards_total > 0:
+		s += 35.0 * float(shards) / float(shards_total)
+	if rings_total > 0:
+		s += 20.0 * float(rings) / float(rings_total)
+	s += 25.0 if run_time < 300.0 else (15.0 if run_time < 480.0 else 6.0)
+	s += 20.0 if deaths == 0 else (12.0 if deaths <= 2 else (5.0 if deaths <= 5 else 0.0))
+	var r := "C"
+	if s >= 85.0:
+		r = "S"
+	elif s >= 65.0:
+		r = "A"
+	elif s >= 45.0:
+		r = "B"
+	return {"score": int(round(s)), "rank": r}
 ## Boss HUD: visible, title, health ratio, shielded.
 signal boss_hud(show: bool, title: String, ratio: float, shielded: bool)
 
@@ -95,6 +131,10 @@ func reset_run() -> void:
 	running = false
 	shown_prompts.clear()
 	progress = ""
+	shards = 0
+	rings = 0
+	deaths = 0
+	drones_down = 0
 	checkpoint_pos = Vector3(0, 1.2, 3)
 	checkpoint_yaw = 0.0
 

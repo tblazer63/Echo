@@ -1,8 +1,11 @@
 class_name ResonantCrossing
 extends Node3D
-## Builds the playable level: start ruin -> hidden bridge -> relay islet ->
-## locked gate -> timed hidden steps -> Signal Gate.
+## Builds the playable world. Level 1 "The First Resonance" is laid out here;
+## Level 2 "Dissonant Heights" is built by LevelTwoLayout using the public
+## helper API below (add_island, add_drone, setup_surf, setup_clone_puzzle...).
 
+var level_id := 1
+var sky_mat: ProceduralSkyMaterial
 var relay: EchoRelay
 var gate: LockedGate
 var signal_gate: SignalGate
@@ -25,34 +28,252 @@ const ISLAND_C := Vector3(0, 4, -88)
 const ISLAND_D := Vector3(29, 4, -88)
 
 
+var sentinel: Sentinel
+var pylons: Array[ShieldPylon] = []
+var _clone_hint_t := 0.0
+var _clone_hold_hinted := false
+
+
+func _ready() -> void:
+	level_id = Game.level_id
+	seed(7 + level_id * 13)
+	Game.shards_total = 0
+	Game.rings_total = 0
+	_build_environment()
+	restoration = RestorationController.new()
+	add_child(restoration)
+	restoration.setup(env, sun)
+	Game.player_respawned.connect(_on_respawn)
+	if level_id == 2:
+		LevelTwoLayout.build(self)
+	else:
+		_build_layout()
+	restoration.set_corrupted()
+	_build_background()
+	apply_quality(Game.quality)
+	Game.quality_changed.connect(apply_quality)
+
+
+func _on_respawn() -> void:
+	for d in get_tree().get_nodes_in_group("drone"):
+		if d.has_method("reset_drone"):
+			d.call("reset_drone")
+	for p in get_tree().get_nodes_in_group("enemy_projectile"):
+		p.call("destroy")
+	if sentinel and sentinel.active and not sentinel.is_defeated():
+		sentinel.reset_fight()
+
+
+# ===================================================================
+# Public level-building API (used by Level 1 below and LevelTwoLayout)
+# ===================================================================
+
+func add_island(pos: Vector3, radius: float, depth: float) -> Node3D:
+	return Builders.island(self, pos, radius, depth)
+
+
+func add_checkpoint(pos: Vector3, yaw_rad: float) -> void:
+	_checkpoint(pos, yaw_rad)
+
+
+func add_zone(pos: Vector3, size: Vector3, cb: Callable) -> void:
+	_zone(pos, size, cb)
+
+
+func add_echo_platform(pos: Vector3, size: Vector3) -> EchoPlatform:
+	return _echo_platform(pos, size)
+
+
+func pulse_marker(pos: Vector3) -> void:
+	_pulse_marker(pos)
+
+
+func add_shard(pos: Vector3) -> void:
+	var s := EnergyShard.new()
+	s.position = pos
+	add_child(s)
+	Game.shards_total += 1
+
+
+## Drones added here gate the surf generator: all must be disabled.
+func add_drone(pos: Vector3, phantom: bool = false) -> EchoDrone:
+	var d: EchoDrone = PhantomDrone.new() if phantom else EchoDrone.new()
+	d.position = pos
+	add_child(d)
+	drones.append(d)
+	d.defeated.connect(_on_drone_defeated)
+	d.defeated.connect(_on_any_enemy_down)
+	return d
+
+
+## Optional ambush enemies that do not gate progress.
+func add_ambush_drone(pos: Vector3, phantom: bool) -> EchoDrone:
+	var d: EchoDrone = PhantomDrone.new() if phantom else EchoDrone.new()
+	d.position = pos
+	add_child(d)
+	d.defeated.connect(_on_any_enemy_down)
+	return d
+
+
+func _on_any_enemy_down(d: Node) -> void:
+	Game.drones_down += 1
+	var p := (d as Node3D).global_position
+	Juice.burst(self, p, Color(0.95, 0.3, 0.85), 30, 0.14)
+	Juice.burst(self, p, Game.ECHO_CYAN, 16, 0.1)
+	Juice.hitstop(get_tree(), 0.07, 0.1)
+	Sfx.play("kill", -2.0)
+	var pl := get_tree().get_first_node_in_group("player")
+	if pl:
+		Juice.shake(pl, 0.25)
+
+
 func _on_drone_defeated(_d: Node) -> void:
 	var n := 0
 	for d in drones:
 		if d.is_defeated():
 			n += 1
 	Game.set_progress("Drones disabled  %d / %d" % [n, drones.size()])
-	if n == drones.size():
-		Game.set_objective("Ride the Echo Wave to the temple isle")
+	if n == drones.size() and surf:
+		Game.set_objective("Ride the Echo Wave (press E at the generator)")
 		Game.set_progress("")
 		surf.activate()
 
 
-var sentinel: Sentinel
-var pylons: Array[ShieldPylon] = []
+func setup_surf(points: PackedVector3Array, ring_count: int, obstacle_count: int) -> EchoSurf:
+	surf = EchoSurf.new()
+	surf.points = points
+	surf.ring_count = ring_count
+	surf.obstacle_count = obstacle_count
+	add_child(surf)
+	Game.rings_total += ring_count
+	surf.boarded.connect(func() -> void:
+		Game.set_objective("Ride the Echo Wave. Steer with A / D")
+		Game.set_progress(""))
+	surf.ring_collected.connect(func(_c: int, _t: int) -> void:
+		Game.rings += 1)
+	surf.finished.connect(func(_c: int, _t: int) -> void:
+		if clone_gate and not clone_gate.is_open:
+			Game.set_objective("Stand on switch A and press R to record your echo")
+			Game.set_progress("Then stand on switch B while your echo holds A")
+			Game.prompt("Two switches, one of you. Record an ECHO CLONE: stand on A, press R.", 6.0, "clone_hint"))
+	return surf
 
 
-## The Sentinel guards the Spire on island C; two pylons power its shield.
-func _build_sentinel_arena() -> void:
-	for off: Vector3 in [Vector3(-7.6, 0, -1.0), Vector3(7.8, 0, -2.6)]:
+## Two-switch Echo Clone puzzle that opens a LockedGate.
+func setup_clone_puzzle(a_pos: Vector3, b_pos: Vector3, gate_pos: Vector3, gate_yaw_deg: float) -> void:
+	switch_a = PressureSwitch.new()
+	switch_a.id = "A"
+	switch_a.position = a_pos
+	add_child(switch_a)
+	switch_b = PressureSwitch.new()
+	switch_b.id = "B"
+	switch_b.position = b_pos
+	add_child(switch_b)
+	switch_a.changed.connect(_on_switch_changed)
+	switch_b.changed.connect(_on_switch_changed)
+	_sign(a_pos + Vector3.UP * 2.35, "1 · STAND HERE + PRESS R\n(record your echo)")
+	_sign(b_pos + Vector3.UP * 2.35, "2 · THEN STAND HERE\nwhile your echo holds A")
+	clone_gate = LockedGate.new()
+	clone_gate.position = gate_pos
+	clone_gate.rotation.y = deg_to_rad(gate_yaw_deg)
+	add_child(clone_gate)
+	clone_gate.unlocked.connect(func() -> void:
+		if machine:
+			machine.enabled = true
+		Game.set_progress("")
+		Game.prompt("Two echoes, one key. The gate opens!", 3.0)
+		Game.set_objective("Echo Scan the ancient machine on the pier"))
+
+
+func _sign(pos: Vector3, text: String) -> void:
+	var l := Label3D.new()
+	l.text = text
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.font_size = 48
+	l.pixel_size = 0.006
+	l.outline_size = 12
+	l.modulate = Color(0.9, 1.0, 1.0)
+	l.outline_modulate = Color(0.02, 0.1, 0.14, 0.9)
+	l.position = pos
+	add_child(l)
+
+
+func _on_switch_changed(_p: bool) -> void:
+	if clone_gate == null or clone_gate.is_open:
+		return
+	var count := int(switch_a.is_pressed()) + int(switch_b.is_pressed())
+	Game.set_progress("Switches  %d / 2" % count)
+	if count == 2:
+		clone_gate.unlock()
+
+
+## Context hints so the clone puzzle teaches itself.
+func _process(delta: float) -> void:
+	if clone_gate == null or clone_gate.is_open or switch_a == null:
+		return
+	var player := get_tree().get_first_node_in_group("player") as Node3D
+	if player == null:
+		return
+	var clones := get_tree().get_nodes_in_group("clone")
+	var on_switch: PressureSwitch = null
+	for s: PressureSwitch in [switch_a, switch_b]:
+		if s.global_position.distance_to(player.global_position) < 1.3:
+			on_switch = s
+	if on_switch and clones.is_empty():
+		_clone_hint_t += delta
+		if _clone_hint_t > 1.5:
+			_clone_hint_t = -6.0
+			Game.prompt("Press  R  now to record your echo standing on switch %s" % on_switch.id, 4.0)
+	else:
+		_clone_hint_t = minf(_clone_hint_t, 0.0)
+	if not _clone_hold_hinted:
+		for c in clones:
+			for s: PressureSwitch in [switch_a, switch_b]:
+				if (c as Node3D).global_position.distance_to(s.global_position) < 1.2 and s.is_pressed():
+					_clone_hold_hinted = true
+					var other := switch_b if s == switch_a else switch_a
+					Game.prompt("Your echo holds switch %s. Now stand on switch %s!" % [s.id, other.id], 5.0)
+					Game.set_objective("Stand on switch %s while your echo holds %s" % [other.id, s.id])
+
+
+func setup_machine_bridge(machine_pos: Vector3, bridge_pivot: Vector3, bridge_yaw_deg: float, length: float) -> void:
+	machine = ResonanceMachine.new()
+	machine.position = machine_pos
+	add_child(machine)
+	bridge = TransformBridge.new()
+	bridge.length = length
+	bridge.position = bridge_pivot
+	bridge.rotation.y = deg_to_rad(bridge_yaw_deg)
+	add_child(bridge)
+	machine.activated_signal.connect(func() -> void:
+		bridge.activate()
+		Game.set_objective("Cross the bridge to the Resonance Spire"))
+
+
+func setup_spire(pos: Vector3) -> SignalGate:
+	signal_gate = SignalGate.new()
+	signal_gate.position = pos
+	add_child(signal_gate)
+	signal_gate.restored.connect(func() -> void:
+		restoration.restore(signal_gate.global_position + Vector3.UP * 7.0)
+		Sfx.set_restored_music(true))
+	return signal_gate
+
+
+## The Sentinel guards the Spire; pylons power its shield.
+func build_sentinel_arena(arena_center: Vector3, pylon_positions: Array, max_hp: float, zone_pos: Vector3, zone_size: Vector3) -> void:
+	for pp in pylon_positions:
 		var p := ShieldPylon.new()
-		p.position = ISLAND_C + off
+		p.position = pp
 		add_child(p)
 		pylons.append(p)
 	sentinel = Sentinel.new()
-	sentinel.arena_center = ISLAND_C + Vector3(-2.5, 0, 2.0)
+	sentinel.arena_center = arena_center
+	sentinel.max_hp = max_hp
+	sentinel.hp = max_hp
 	sentinel.pylons = pylons
 	add_child(sentinel)
-	sentinel.global_position = ISLAND_C + Vector3(-2.5, 5.5, 2.0)
+	sentinel.global_position = arena_center + Vector3.UP * 5.5
 	sentinel.health_changed.connect(func(hp: float, mx: float) -> void:
 		Game.boss_hud.emit(true, "THE SENTINEL", hp / mx, sentinel.shield_up))
 	sentinel.shield_changed.connect(func(up: bool) -> void:
@@ -60,14 +281,15 @@ func _build_sentinel_arena() -> void:
 		if up:
 			Game.set_progress("Break the shield pylons (Echo Scan or Sonic Bolt)")
 		else:
-			Game.set_progress("Shield down. Strike the core!"))
+			Game.set_progress("Shield down. Echo Scan the core, then shoot!"))
 	sentinel.defeated.connect(func() -> void:
+		_on_any_enemy_down(sentinel)
 		Game.boss_hud.emit(false, "", 0.0, false)
 		Game.set_progress("")
-		Game.set_objective("Restore the First Resonance Spire")
+		Game.set_objective("Restore the Resonance Spire")
 		signal_gate.sealed = false
 		signal_gate.recheck())
-	_zone(ISLAND_C + Vector3(6.0, 1.5, 0.0), Vector3(5, 3, 12), func() -> void:
+	_zone(zone_pos, zone_size, func() -> void:
 		if sentinel.is_defeated():
 			return
 		signal_gate.sealed = true
@@ -76,27 +298,17 @@ func _build_sentinel_arena() -> void:
 		Game.set_progress("Break the shield pylons (Echo Scan or Sonic Bolt)")
 		Game.prompt("THE SENTINEL awakens! Its shield draws power from the pylons.", 5.0))
 	signal_gate.sealed = true
-	Game.player_respawned.connect(func() -> void:
-		if sentinel.active and not sentinel.is_defeated():
-			sentinel.reset_fight())
 
 
-func _on_switch_changed(_p: bool) -> void:
-	if clone_gate.is_open:
-		return
-	var count := int(switch_a.is_pressed()) + int(switch_b.is_pressed())
-	Game.set_progress("Switches  %d / 2" % count)
-	if count == 2 and not clone_gate.is_open:
-		clone_gate.unlock()
-
-
-func _ready() -> void:
-	seed(7)
-	_build_environment()
-	_build_layout()
-	_build_background()
-	apply_quality(Game.quality)
-	Game.quality_changed.connect(apply_quality)
+## Warm golden-hour palette for Level 2.
+func set_golden_hour() -> void:
+	sky_mat.sky_top_color = Color(0.28, 0.45, 0.78)
+	sky_mat.sky_horizon_color = Color(0.98, 0.80, 0.62)
+	sky_mat.ground_horizon_color = Color(0.95, 0.80, 0.68)
+	sky_mat.ground_bottom_color = Color(0.70, 0.66, 0.78)
+	sun.light_color = Color(1.0, 0.82, 0.62)
+	sun.rotation = Vector3(deg_to_rad(-22), deg_to_rad(-120), 0)
+	env.fog_light_color = Color(0.95, 0.82, 0.74)
 
 
 func _build_environment() -> void:
@@ -111,6 +323,7 @@ func _build_environment() -> void:
 	sm.sun_angle_max = 25.0
 	sm.sun_curve = 0.12
 	sm.energy_multiplier = 1.1
+	sky_mat = sm
 	sky.sky_material = sm
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
@@ -208,10 +421,18 @@ func _build_layout() -> void:
 	gate.unlocked.connect(func() -> void:
 		Game.prompt("The gate answers your echo", 3.0))
 
-	# --- World restoration controller (world starts slightly corrupted) ---
-	restoration = RestorationController.new()
-	add_child(restoration)
-	restoration.setup(env, sun)
+	# --- Optional side path (Level 1 extension): hidden steps to a shard islet ---
+	add_echo_platform(Vector3(7.0, -0.2, -3.5), Vector3(2.8, 0.4, 2.8))
+	add_echo_platform(Vector3(9.8, -0.2, -4.5), Vector3(2.8, 0.4, 2.8))
+	Builders.island(self, Vector3(13.2, 0, -5.0), 2.6, 5.0)
+	Builders.pillar(self, Vector3(14.0, 0, -5.8), 3.0, 0.8, true)
+	add_shard(Vector3(13.0, 1.2, -4.6))
+	add_shard(START + Vector3(0, 1.2, 6.2))
+	add_shard(ISLAND_A + Vector3(6.2, 1.2, 4.0))
+	add_shard(RELAY_ISLET + Vector3(-2.6, 1.2, 1.8))
+	# Phantom ambush over the hub (optional fight, lengthens the level).
+	add_ambush_drone(ISLAND_A + Vector3(-3.5, 4.0, -3.0), true)
+	add_ambush_drone(ISLAND_A + Vector3(4.0, 4.5, -4.5), false)
 
 	# --- Island B: Courtyard Interference (combat) ---
 	Builders.island(self, ISLAND_B, 6.5, 10.0)
@@ -220,37 +441,19 @@ func _build_layout() -> void:
 	Builders.pillar(self, ISLAND_B + Vector3(-1.5, 0, -4.5), 6.5)
 	Builders.waterfall(self, ISLAND_B + Vector3(-6.45, -0.4, 0.5), 2.5, 22.0, deg_to_rad(-90))
 	for off: Vector3 in [Vector3(-3.5, 3.5, -3.0), Vector3(3.5, 4.0, -4.0), Vector3(0.0, 5.0, -8.0)]:
-		var d := EchoDrone.new()
-		d.position = ISLAND_B + off
-		add_child(d)
-		drones.append(d)
-		d.defeated.connect(_on_drone_defeated)
+		add_drone(ISLAND_B + off)
+	add_shard(ISLAND_B + Vector3(-5.2, 1.2, -3.6))
 	_zone(ISLAND_B + Vector3(0, 1.5, 4.5), Vector3(13, 3, 3), func() -> void:
 		Game.set_objective("Disable the corrupted Echo Drones")
 		Game.set_progress("Drones disabled  0 / %d" % drones.size())
 		Game.prompt("LMB fires a Sonic Bolt.  Echo Scan (Q) stuns drones and exposes their cores!", 6.0, "combat_hint"))
-	Game.player_respawned.connect(func() -> void:
-		for d in drones:
-			d.reset_drone()
-		for p in get_tree().get_nodes_in_group("enemy_projectile"):
-			p.call("destroy"))
 
-	# --- Echo Surf: B -> island D over the clouds ---
-	surf = EchoSurf.new()
-	surf.points = PackedVector3Array([
+	# --- Echo Surf: B -> island D over the clouds (with obstacles + time trial) ---
+	setup_surf(PackedVector3Array([
 		ISLAND_B + Vector3(3.8, 0.0, -2.5), Vector3(10.0, -0.8, -57.5), Vector3(19.0, -3.0, -62.0),
 		Vector3(28.0, -1.5, -66.5), Vector3(35.0, 1.5, -73.0), Vector3(34.5, 4.0, -80.0),
 		ISLAND_D + Vector3(1.5, 0.0, 4.0),
-	])
-	surf.ring_count = 8
-	add_child(surf)
-	surf.boarded.connect(func() -> void:
-		Game.set_objective("Ride the Echo Wave")
-		Game.set_progress(""))
-	surf.ring_collected.connect(func(c: int, t: int) -> void: Game.set_progress("Rings  %d / %d" % [c, t]))
-	surf.finished.connect(func(_c: int, _t: int) -> void:
-		Game.set_objective("Open the temple gate. One echo is not enough...")
-		Game.prompt("Press  R  to record an Echo Clone. It will repeat your moves.", 6.0, "clone_hint"))
+	]), 8, 4)
 
 	# --- Island D: The Duplicate Key (clone puzzle) ---
 	Builders.island(self, ISLAND_D, 7.5, 10.0)
@@ -258,49 +461,19 @@ func _build_layout() -> void:
 	Builders.pillar(self, ISLAND_D + Vector3(4.5, 0, -4.5), 7.0)
 	Builders.pillar(self, ISLAND_D + Vector3(-1.0, 0, -6.0), 4.0, 1.0, true)
 	Builders.arch(self, ISLAND_D + Vector3(4.0, 0, 0.0), 3.4, 4.5, deg_to_rad(90))
-	switch_a = PressureSwitch.new()
-	switch_a.id = "A"
-	switch_a.position = ISLAND_D + Vector3(-1.5, 0.0, 3.6)
-	add_child(switch_a)
-	switch_b = PressureSwitch.new()
-	switch_b.id = "B"
-	switch_b.position = ISLAND_D + Vector3(-1.5, 0.0, -3.6)
-	add_child(switch_b)
-	switch_a.changed.connect(_on_switch_changed)
-	switch_b.changed.connect(_on_switch_changed)
-
+	add_shard(ISLAND_D + Vector3(5.6, 1.2, 0.0))
 	# Pier west of D with the clone gate and the resonance machine.
 	Builders.walkway(self, ISLAND_D + Vector3(-7.0, 0, 0), ISLAND_D + Vector3(-13.0, 0, 0), 3.6)
-	clone_gate = LockedGate.new()
-	clone_gate.position = ISLAND_D + Vector3(-8.3, 0, 0)
-	clone_gate.rotation.y = deg_to_rad(90)
-	add_child(clone_gate)
-	clone_gate.unlocked.connect(func() -> void:
-		machine.enabled = true
-		Game.set_progress("")
-		Game.set_objective("Resonate the ancient machine on the pier"))
-	machine = ResonanceMachine.new()
-	machine.position = ISLAND_D + Vector3(-12.0, 0, 1.3)
-	add_child(machine)
-	bridge = TransformBridge.new()
-	bridge.length = 7.0
-	bridge.position = ISLAND_D + Vector3(-13.0, 0, 0)
-	bridge.rotation.y = deg_to_rad(90)
-	add_child(bridge)
-	machine.activated_signal.connect(func() -> void:
-		bridge.activate()
-		Game.set_objective("Cross to the First Resonance Spire"))
+	setup_clone_puzzle(ISLAND_D + Vector3(-1.5, 0.0, 3.6), ISLAND_D + Vector3(-1.5, 0.0, -3.6),
+		ISLAND_D + Vector3(-8.3, 0, 0), 90.0)
+	setup_machine_bridge(ISLAND_D + Vector3(-12.0, 0, 1.3), ISLAND_D + Vector3(-13.0, 0, 0), 90.0, 7.0)
 	_checkpoint(ISLAND_D + Vector3(-11.0, 0, -0.6), deg_to_rad(90))
 
 	# --- Island C: Signal Gate = First Resonance Spire ---
 	Builders.island(self, ISLAND_C, 9.5, 14.0)
 	_checkpoint(ISLAND_C + Vector3(6.5, 0, 0.0), deg_to_rad(90))
-	signal_gate = SignalGate.new()
-	signal_gate.position = ISLAND_C + Vector3(0, 0, -5.0)
-	add_child(signal_gate)
-	signal_gate.restored.connect(func() -> void:
-		restoration.restore(signal_gate.global_position + Vector3.UP * 7.0)
-		Sfx.set_restored_music(true))
+	setup_spire(ISLAND_C + Vector3(0, 0, -5.0))
+	add_shard(ISLAND_C + Vector3(-6.5, 1.2, -5.0))
 	Builders.pillar(self, ISLAND_C + Vector3(-7.0, 0, 2.0), 8.0)
 	Builders.pillar(self, ISLAND_C + Vector3(7.0, 0, 4.5), 8.0)
 	Builders.pillar(self, ISLAND_C + Vector3(-6.0, 0, 6.5), 4.5, 1.0, true)
@@ -315,8 +488,9 @@ func _build_layout() -> void:
 	restoration.add_crystals(self, ISLAND_B, 6.5, 7)
 	restoration.add_crystals(self, ISLAND_D, 7.5, 7)
 	restoration.add_crystals(self, ISLAND_C, 9.5, 10)
-	restoration.set_corrupted()
-	_build_sentinel_arena()
+	build_sentinel_arena(ISLAND_C + Vector3(-2.5, 0, 2.0),
+		[ISLAND_C + Vector3(-7.6, 0, -1.0), ISLAND_C + Vector3(7.8, 0, -2.6)], 320.0,
+		ISLAND_C + Vector3(6.0, 1.5, 0.0), Vector3(5, 3, 12))
 
 	# Holographic hints of the hidden world near the path.
 	_holo_arch(Vector3(-11, 0, -14), deg_to_rad(70))

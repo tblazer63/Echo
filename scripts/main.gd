@@ -18,22 +18,29 @@ var _qa := ""
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	RenderingServer.global_shader_parameter_set("echo_strength", 0.0)
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--qa="):
+			_qa = a.substr(5)
+	if _qa.ends_with("2") or _qa.begins_with("tour2") or _qa.begins_with("shots2"):
+		Game.level_id = 2
 	level = ResonantCrossing.new()
 	level.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(level)
 	menus = Menus.new()
 	add_child(menus)
 	menus.play_pressed.connect(_on_play)
+	menus.play_level.connect(func(id: int) -> void:
+		if player == null and id == Game.level_id:
+			_start_play()
+		else:
+			Game.level_id = id
+			_reload("play"))
 	menus.resume_pressed.connect(func() -> void: _set_paused(false))
 	menus.restart_pressed.connect(func() -> void:
 		_set_paused(false)
 		player.respawn())
 	menus.menu_pressed.connect(func() -> void: _reload("menu"))
 	Game.level_won.connect(_on_won)
-
-	for a in OS.get_cmdline_user_args():
-		if a.begins_with("--qa="):
-			_qa = a.substr(5)
 
 	if _qa.begins_with("menu"):
 		_start_menu()
@@ -85,8 +92,13 @@ func _start_play() -> void:
 	add_child(hud)
 	menus.hide_all()
 	Game.running = true
-	Game.set_objective("Cross the gap. Let your echo reveal the way.")
-	Game.prompt("WASD move  ·  Mouse look  ·  Space jump  ·  Shift sprint", 5.0, "move_hint")
+	if Game.level_id == 1:
+		Game.set_objective("Cross the gap. Let your echo reveal the way.")
+		Game.prompt("LEVEL 1 · THE FIRST RESONANCE      WASD move · Space jump · Q Echo Scan", 5.0)
+	else:
+		Game.set_objective("Climb the Dissonant Heights")
+		Game.prompt("LEVEL 2 · DISSONANT HEIGHTS      Hidden steps fade. Scan again mid-climb!", 6.0)
+	Game.set_progress("")
 	hud.flash(Color(0.85, 1, 1), 1.2)
 
 
@@ -166,10 +178,234 @@ func _run_qa() -> void:
 		await _qa_shots(_qa.substr(6))
 	elif _qa == "logic":
 		await _qa_logic()
+	elif _qa == "logic2":
+		await _qa_logic2()
 	elif _qa.begins_with("perf"):
 		await _qa_perf()
 	elif _qa.begins_with("tour:"):
 		await _qa_tour(_qa.substr(5))
+	elif _qa.begins_with("tour2:"):
+		await _qa_tour2(_qa.substr(6))
+
+
+func _qa_tour2(dir: String) -> void:
+	var sp: Dictionary = LevelTwoLayout.spawn_points()
+	player.health.grant_iframes(999.0)
+	await _wait(3.0)
+	await _shot(dir, "30_l2_start.png")
+	_teleport(sp["steps_start"], 0.0, 10.0)
+	await _wait(0.5)
+	player.emitter.charge = 1.0
+	player.emitter.try_pulse()
+	await _wait(1.2)
+	await _shot(dir, "31_l2_steps.png")
+	_teleport(sp["arena"], 0.0, 15.0)
+	await _wait(2.0)
+	player.emitter.charge = 1.0
+	player.emitter.try_pulse()
+	await _wait(0.6)
+	await _shot(dir, "32_l2_arena_phantoms.png")
+	for d in level.drones:
+		var tries := 0
+		while not d.is_defeated() and tries < 20:
+			if d is PhantomDrone and not (d as PhantomDrone).is_revealed():
+				d.on_echo(d.global_position, PulseWave.spawn(self, d.global_position, 0.5, true))
+			d.take_damage(40.0, d.global_position)
+			await _wait(0.1)
+			tries += 1
+	await _wait(1.0)
+	_teleport(sp["surf_start_island"], 0.0)
+	await _wait(0.3)
+	level.surf.board(player)
+	await _wait(1.8)
+	await _shot(dir, "33_l2_surf_obstacles.png")
+	while level.surf.is_riding():
+		await _wait(0.2)
+	await _wait(0.8)
+	_teleport(sp["clone_island"], 0.0, 5.0)
+	await _wait(1.0)
+	await _shot(dir, "34_l2_clone_island.png")
+	_teleport(sp["switch_a"], 0.0)
+	await _press("record")
+	await _wait(0.8)
+	await _press("record")
+	await _wait(0.4)
+	_teleport(sp["switch_b"], 0.0)
+	await _wait(3.0)
+	_teleport(sp["pier_machine_side"], 0.0)
+	player.emitter.charge = 1.0
+	player.emitter.try_pulse()
+	await _wait(4.0)
+	_teleport(sp["bridge_walk_start"], sp["bridge_yaw_deg"], 6.0)
+	await _wait(0.8)
+	await _shot(dir, "35_l2_bridge.png")
+	_teleport(Vector3(sp["final_island"]) + Vector3(0, 0, 6.0), 0.0, 18.0)
+	await _wait(2.5)
+	await _shot(dir, "36_l2_sentinel.png")
+	var boss := level.sentinel
+	if not boss.active:
+		boss.start_fight()
+	var guard := 0
+	while not boss.is_defeated() and guard < 120:
+		if boss.shield_up:
+			for p in level.pylons:
+				p.disable()
+		boss.take_damage(20.0, boss.global_position)
+		await _wait(0.05)
+		guard += 1
+	await _wait(1.0)
+	_teleport(sp["spire_front"], 0.0)
+	Input.action_press("move_forward")
+	await _wait(1.6)
+	Input.action_release("move_forward")
+	await _wait(3.5)
+	await _shot(dir, "37_l2_restored.png")
+	await _wait(1.5)
+	await _shot(dir, "38_l2_victory.png")
+	print("QA_TOUR_DONE")
+	get_tree().quit()
+
+
+func _press(action: String) -> void:
+	Input.action_press(action)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	Input.action_release(action)
+
+
+## Level 2 "Dissonant Heights" scripted playthrough.
+func _qa_logic2() -> void:
+	var fails: Array = []
+	var sp: Dictionary = LevelTwoLayout.spawn_points()
+	player.health.grant_iframes(999.0)
+	var waited := 0.0
+	while not player.is_on_floor() and waited < 6.0:
+		await _wait(0.1)
+		waited += 0.1
+	_check(player.is_on_floor(), "L2: player spawns on floor (pos %s)" % str(player.global_position), fails)
+	_check(Game.level_id == 2, "L2: level 2 is loaded", fails)
+	_check(Game.shards_total >= 3, "L2: has %d shards" % Game.shards_total, fails)
+
+	# 1. Hidden ascending steps reveal on scan.
+	var steps_start: Vector3 = sp["steps_start"]
+	_teleport(steps_start + Vector3.UP * 0.2, 0.0)
+	await _wait(0.6)
+	player.emitter.charge = 1.0
+	player.emitter.try_pulse()
+	await _wait(1.0)
+	var active := 0
+	for n in get_tree().get_nodes_in_group("echo_reactive"):
+		if n is EchoPlatform and (n as EchoPlatform).is_active():
+			active += 1
+	_check(active >= 2, "L2: scan reveals hidden steps (%d active)" % active, fails)
+
+	# 2. Arena: phantoms are immune until revealed, then all drones go down.
+	var arena: Vector3 = sp["arena"]
+	_teleport(arena + Vector3.UP * 0.2, 0.0)
+	await _wait(1.5)
+	var drones := level.drones
+	_check(drones.size() >= 4, "L2: arena has %d drones" % drones.size(), fails)
+	var phantom: PhantomDrone = null
+	for d in drones:
+		if d is PhantomDrone:
+			phantom = d
+	_check(phantom != null, "L2: arena includes a Phantom drone", fails)
+	if phantom:
+		var hp0: float = phantom.hp
+		phantom.take_damage(20.0, phantom.global_position)
+		_check(is_equal_approx(phantom.hp, hp0), "L2: cloaked phantom ignores damage", fails)
+	_check(not level.surf.enabled, "L2: surf dormant before arena cleared", fails)
+	for d in drones:
+		var tries := 0
+		while not d.is_defeated() and tries < 20:
+			if d is PhantomDrone and not (d as PhantomDrone).is_revealed():
+				_teleport(d.global_position + Vector3(0, -3.0, 2.0), 0.0)
+				player.emitter.charge = 1.0
+				player.emitter.try_pulse()
+				await _wait(0.8)
+			var from := d.global_position + Vector3(0, 0.5, 3.0)
+			SonicBolt.fire(self, from, (d.global_position - from).normalized())
+			await _wait(0.25)
+			tries += 1
+	_check(drones.all(func(x: EchoDrone) -> bool: return x.is_defeated()), "L2: all arena drones defeated (phantoms via scan)", fails)
+	await _wait(0.5)
+	_check(level.surf.enabled, "L2: clearing the arena activates the surf", fails)
+
+	# 3. Surf with obstacles to the clone island.
+	_teleport(arena + Vector3.UP * 0.2, 0.0)
+	await _wait(0.3)
+	level.surf.board(player)
+	var ride := 0.0
+	while level.surf.is_riding() and ride < 25.0:
+		await _wait(0.25)
+		ride += 0.25
+	await _wait(0.8)
+	var clone_island: Vector3 = sp["clone_island"]
+	_check(player.global_position.distance_to(clone_island) < 10.0, "L2: surf (%.1fs) lands on the clone island (pos %s)" % [ride, str(player.global_position)], fails)
+
+	# 4. Clone puzzle with the real R key.
+	var sa: Vector3 = sp["switch_a"]
+	var sb: Vector3 = sp["switch_b"]
+	_teleport(sa + Vector3.UP * 0.2, 0.0)
+	await _wait(0.5)
+	await _press("record")
+	await _wait(1.0)
+	await _press("record")
+	await _wait(0.6)
+	_teleport(sb + Vector3.UP * 0.2, 0.0)
+	await _wait(1.0)
+	_check(level.clone_gate.is_open, "L2: echo clone + player open the gate", fails)
+
+	# 5. Machine + bridge.
+	await _wait(2.5)
+	var ms: Vector3 = sp["pier_machine_side"]
+	_teleport(ms + Vector3.UP * 0.2, 0.0)
+	await _wait(0.5)
+	player.emitter.charge = 1.0
+	player.emitter.try_pulse()
+	await _wait(4.0)
+	_check(level.bridge.active and level.bridge.is_settled(), "L2: scan transforms the bridge", fails)
+	var bws: Vector3 = sp["bridge_walk_start"]
+	var byaw: float = sp["bridge_yaw_deg"]
+	_teleport(bws + Vector3.UP * 0.2, byaw)
+	await _wait(0.4)
+	Input.action_press("move_forward")
+	await _wait(2.6)
+	Input.action_release("move_forward")
+	await _wait(0.5)
+	var fin: Vector3 = sp["final_island"]
+	var dfin := Vector2(player.global_position.x - fin.x, player.global_position.z - fin.z).length()
+	_check(dfin < 10.5 and player.global_position.y > fin.y - 2.5, "L2: crossed the bridge to the final island (d %.1f, pos %s)" % [dfin, str(player.global_position)], fails)
+
+	# 6. Sentinel (3 pylons).
+	await _wait(1.0)
+	var boss := level.sentinel
+	if not boss.active:
+		boss.start_fight()
+		level.signal_gate.sealed = true
+	_check(level.pylons.size() == 3, "L2: Sentinel has 3 pylons", fails)
+	var guard := 0
+	while not boss.is_defeated() and guard < 120:
+		if boss.shield_up:
+			for p in level.pylons:
+				p.disable()
+		boss.take_damage(20.0, boss.global_position)
+		await _wait(0.05)
+		guard += 1
+	await _wait(0.5)
+	_check(boss.is_defeated() and not level.signal_gate.sealed, "L2: Sentinel defeated, spire unsealed", fails)
+
+	# 7. Final spire.
+	var front: Vector3 = sp["spire_front"]
+	_teleport(front + Vector3.UP * 0.2, 0.0)
+	await _wait(0.3)
+	Input.action_press("move_forward")
+	await _wait(1.8)
+	Input.action_release("move_forward")
+	await _wait(1.5)
+	_check(Game.won and level.restoration.restored, "L2: restoring the Second Spire wins (pos %s)" % str(player.global_position), fails)
+	print("QA_RESULT ", "PASS" if fails.is_empty() else "FAIL %s" % str(fails))
+	get_tree().quit(0 if fails.is_empty() else 1)
 
 
 ## Screenshot tour of the Last Resonance systems (combat, surf, clone, bridge, restoration).
@@ -338,6 +574,12 @@ func _qa_logic() -> void:
 		await _wait(0.1)
 		waited += 0.1
 	_check(player.is_on_floor() and player.global_position.y > -0.2, "player spawns on floor (pos %s, %.1fs)" % [str(player.global_position), waited], fails)
+	_check(Game.shards_total >= 6, "level 1 has %d energy shards" % Game.shards_total, fails)
+	_teleport(Vector3(0, 0.2, 6.2), 0.0)
+	await _wait(0.6)
+	_check(Game.shards == 1, "walking into a shard collects it", fails)
+	_teleport(Vector3(0, 0.2, 3.0), 0.0)
+	await _wait(0.3)
 
 	# 1. Bridge hidden before pulse: walking forward should NOT be possible yet.
 	var bridge := _platforms_between(-20.0, -6.0)
@@ -422,10 +664,13 @@ func _qa_logic() -> void:
 	_check(not level.clone_gate.is_open, "clone gate starts locked", fails)
 	_teleport(level.switch_a.global_position + Vector3.UP * 0.2, 90.0)
 	await _wait(0.5)
-	recorder.start_recording()
-	await _wait(1.0)
-	recorder.stop_recording()
+	await _press("record")
+	await _wait(0.2)
+	_check(recorder.is_recording, "R key starts echo recording", fails)
+	await _wait(0.8)
+	await _press("record")
 	await _wait(0.6)
+	_check(get_tree().get_nodes_in_group("clone").size() == 1, "R key again spawns the echo clone", fails)
 	_teleport(level.switch_b.global_position + Vector3.UP * 0.2, 90.0)
 	await _wait(1.0)
 	_check(level.switch_a.is_pressed(), "clone keeps switch A pressed", fails)

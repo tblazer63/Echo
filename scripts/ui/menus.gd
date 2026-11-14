@@ -3,6 +3,7 @@ extends CanvasLayer
 ## Main menu, pause menu, settings and victory screens.
 
 signal play_pressed
+signal play_level(id: int)
 signal resume_pressed
 signal restart_pressed
 signal menu_pressed
@@ -12,6 +13,9 @@ var _pause: Control
 var _settings: Control
 var _victory: Control
 var _victory_time: Label
+var _victory_title: Label
+var _victory_rank: Label
+var _continue: Button
 var _settings_back_to: Control
 
 
@@ -39,7 +43,12 @@ func show_pause() -> void:
 
 
 func show_victory(time_text: String) -> void:
-	_victory_time.text = "Time  " + time_text
+	var r := Game.rank()
+	_victory_title.text = "SPIRE RESTORED" if Game.level_id == 1 else "THE HEIGHTS SING AGAIN"
+	_victory_time.text = "Time  %s     ·     Shards  %d / %d     ·     Rings  %d / %d\nDrones silenced  %d     ·     Falls & defeats  %d" % [
+		time_text, Game.shards, Game.shards_total, Game.rings, Game.rings_total, Game.drones_down, Game.deaths]
+	_victory_rank.text = "RANK  %s     %d pts" % [r["rank"], r["score"]]
+	_continue.visible = Game.level_id == 1
 	_only(_victory)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_fade_in(_victory)
@@ -111,9 +120,14 @@ func _build_main() -> Control:
 	var spacer := Control.new()
 	spacer.custom_minimum_size.y = 40
 	v.add_child(spacer)
-	var play := UiKit.button("▶   PLAY")
-	play.pressed.connect(func() -> void: play_pressed.emit())
+	var play := UiKit.button("▶   LEVEL 1 · THE FIRST RESONANCE")
+	play.custom_minimum_size.x = 480
+	play.pressed.connect(func() -> void: play_level.emit(1))
 	v.add_child(play)
+	var play2 := UiKit.button("▶   LEVEL 2 · DISSONANT HEIGHTS")
+	play2.custom_minimum_size.x = 480
+	play2.pressed.connect(func() -> void: play_level.emit(2))
+	v.add_child(play2)
 	var settings := UiKit.button("⚙   SETTINGS")
 	settings.pressed.connect(func() -> void: _open_settings(_main))
 	v.add_child(settings)
@@ -203,16 +217,22 @@ func _build_victory() -> Control:
 	grad.stretch_mode = TextureRect.STRETCH_SCALE
 	grad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(grad)
-	var v := _column(root, Vector2(110, -200))
-	v.add_child(UiKit.label("SIGNAL RESTORED", 72, UiKit.TEXT, UiKit.wide()))
-	v.add_child(UiKit.label("The ancient gate sings again.", 24, UiKit.CYAN))
-	_victory_time = UiKit.label("", 20, Color(1, 1, 1, 0.85), UiKit.spaced())
+	var v := _column(root, Vector2(110, -240))
+	_victory_title = UiKit.label("SPIRE RESTORED", 64, UiKit.TEXT, UiKit.wide())
+	v.add_child(_victory_title)
+	v.add_child(UiKit.label("The ancient network hums back to life.", 24, UiKit.CYAN))
+	_victory_time = UiKit.label("", 19, Color(1, 1, 1, 0.9), UiKit.spaced())
 	v.add_child(_victory_time)
+	_victory_rank = UiKit.label("", 40, Color(1.0, 0.85, 0.4), UiKit.wide())
+	v.add_child(_victory_rank)
 	var spacer := Control.new()
-	spacer.custom_minimum_size.y = 24
+	spacer.custom_minimum_size.y = 16
 	v.add_child(spacer)
+	_continue = UiKit.button("▶   CONTINUE · LEVEL 2")
+	_continue.pressed.connect(func() -> void: play_level.emit(2))
+	v.add_child(_continue)
 	var again := UiKit.button("↺   PLAY AGAIN")
-	again.pressed.connect(func() -> void: play_pressed.emit())
+	again.pressed.connect(func() -> void: play_level.emit(Game.level_id))
 	v.add_child(again)
 	var menu := UiKit.button("⌂   MAIN MENU")
 	menu.pressed.connect(func() -> void: menu_pressed.emit())
