@@ -22,13 +22,27 @@ Run `ECHO.exe` (Windows 10/11, x64). It needs no install. One run through the mi
 
 Scan, bolt and dash share one **Echo Energy** bar that refills quickly, so you can never get stuck without energy.
 
-## The mission: "First Resonance"
+## Two levels
+
+Choose either one from the main menu, or press **Continue** after finishing Level 1.
+
+- **Level 1: The First Resonance.** The full tutorial-to-boss mission described below. It also has an optional hidden side path and a phantom ambush over the hub.
+- **Level 2: Dissonant Heights.** A golden-hour climb. You scan your way up timed, ascending hidden steps, rescanning mid-climb, then clear an arena of Echo Drones and **Phantom Drones**. Next comes a longer surf course with Dissonance obstacles, a harder clone puzzle (the switches sit on opposite sides of a pillar), and a resonance-machine bridge. It ends with a **3-pylon Sentinel** guarding the Second Spire.
+
+**Extras in both levels:**
+- **Energy Shards** hidden off the main path, often on scan-revealed side routes.
+- **Surf time trial.** Dodge the magenta Dissonance orbs, each of which adds 2 s. Your best time is kept for the session.
+- **Phantom Drones** are invisible and immune until your Echo Scan reveals them.
+- **Victory screen** with time, shards, rings, drones silenced, falls, and a **rank from S to C**.
+- **Game feel:** hit-stop on kills, kill bursts, floating damage numbers (gold when you hit an exposed core), muzzle flash and screen shake.
+
+## Level 1 mission: "First Resonance"
 
 1. **The First Echo.** An empty gap is crossed only by a hidden bridge that your scan reveals.
 2. **Resonant Crossing.** A cracked relay pillar is out of your scan's reach. Reveal the hidden steps, scan beside it, and its beam of sound unlocks the gate.
 3. **Courtyard Interference (combat).** Three corrupted Echo Drones attack, firing slow, readable shots after a visible charge-up. Sonic Bolts damage them. **Echo Scan stuns them and exposes their cores for double damage**, so sound is your best weapon.
 4. **Echo Surfing.** Clearing the courtyard wakes a Surf Generator. Ride a glowing wave over the sea of clouds, steer with A/D, and collect rings.
-5. **The Duplicate Key (Echo Clones).** Two pressure switches have to be held at the same time. Record a clone standing on one, then step on the other yourself.
+5. **The Duplicate Key (Echo Clones).** Two pressure switches have to be held at the same time. Stand on switch **A** and press **R** to record your echo. When the hologram appears and holds A, step onto switch **B**. Signs and prompts walk you through it.
 6. **Transforming bridge.** Scan the ancient resonance machine and a shattered bridge swings up into place.
 7. **The Sentinel (mini-boss).** A floating guardian seals the Spire. Two pylons power its shield, and you break them with Echo Scan or Sonic Bolts. With the shield down, scan to expose its core for double damage. At half health it re-forms the shield and switches to 3-shot spreads.
 8. **World restoration.** Restore the Spire: the Dissonance crystals shatter, the muted world floods with color, waterfalls return, flowers bloom, a new music layer begins, and the drones you defeated wake up as friendly robots that circle the Spire.
@@ -47,7 +61,8 @@ Scan, bolt and dash share one **Echo Energy** bar that refills quickly, so you c
 
 ```
 godot --path .
-godot --headless --path . -- --qa=logic
+godot --headless --path . -- --qa=logic     # Level 1 playthrough (42 checks)
+godot --headless --path . -- --qa=logic2    # Level 2 playthrough (17 checks)
 godot --path . -- --qa=perf
 ```
 
