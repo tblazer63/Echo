@@ -108,6 +108,8 @@ func _setup_input() -> void:
 	_bind("pause", [KEY_ESCAPE])
 	_bind("fire", [], [MOUSE_BUTTON_LEFT])
 	_bind("record", [KEY_R])
+	_bind("command", [KEY_C], [MOUSE_BUTTON_MIDDLE])
+	_bind("follow", [KEY_V])
 	_bind("dash", [KEY_F, KEY_CTRL])
 
 

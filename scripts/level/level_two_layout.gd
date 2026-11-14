@@ -100,7 +100,7 @@ static func _build_clone_island(level: ResonantCrossing) -> void:
 	# Prompt only: the surf's `finished` handler already sets the step-by-step
 	# switch objective, which this zone must not overwrite.
 	level.add_zone(f + Vector3(1.5, 1.5, 3.0), Vector3(10, 3, 6), func() -> void:
-		Game.prompt("Press  R  to record an Echo Clone, then hold the other switch yourself.", 6.0, "l2_clone"))
+		Game.prompt("Send your Echo:  aim + C  sends it there (it walks in straight lines, so guide it around the pillar), or R  records one. Then hold the other switch.", 6.0, "l2_clone"))
 	# Pier toward -Z; gate 1.3 m past the island edge (edge at f.z - 8).
 	Builders.walkway(level, f + Vector3(0, 0, -7.6), f + Vector3(0, 0, -7.6 - PIER_LEN), 3.6)
 	level.setup_clone_puzzle(f + Vector3(4.5, 0, -0.5), f + Vector3(-4.5, 0, -0.5), f + Vector3(0, 0, -9.3), 0.0)

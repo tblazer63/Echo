@@ -3,10 +3,21 @@ extends AnimatableBody3D
 ## Holographic replay of a recorded player path. Replays one frame per physics
 ## tick, then holds the final pose forever (so it can keep a switch pressed).
 
+signal blocked
+
+enum Mode { REPLAY, MOVE, FOLLOW }
+
 const REVEAL_SHADER := preload("res://shaders/reveal.gdshader")
 const REVEAL := 1.0
+const WALK_SPEED := 5.0
+const FOLLOW_DIST := 2.5
+const FOLLOW_MAX := 14.0
 
+var mode := Mode.REPLAY
 var frames: Array = []
+var _target := Vector3.ZERO
+var _follow: Node3D
+var _stuck_t := 0.0
 var holding := false
 var _idx := 0
 var _mat: ShaderMaterial
@@ -171,7 +182,94 @@ func _apply(f: Dictionary) -> void:
 		_head.rotation.x = clampf(float(f.get("pitch", 0.0)) * 0.6, -0.7, 0.7)
 
 
+## Command: walk to a point on the ground and hold there.
+func move_to(target: Vector3) -> void:
+	mode = Mode.MOVE
+	_target = target
+	frames = []
+	holding = false
+	_stuck_t = 0.0
+
+
+## Command: follow the given node (the player), rejoining it if left behind.
+func follow(who: Node3D) -> void:
+	mode = Mode.FOLLOW
+	_follow = who
+	frames = []
+	holding = false
+	_stuck_t = 0.0
+
+
+func is_dismissing() -> bool:
+	return _dismissing
+
+
+func _ground_at(p: Vector3) -> Dictionary:
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 1.2, p + Vector3.DOWN * 2.5, 1)
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty() or (hit["normal"] as Vector3).y < 0.5:
+		return {}
+	return hit
+
+
+func _rejoin(p: Vector3) -> void:
+	var g := _ground_at(p)
+	if g.is_empty():
+		return
+	global_position = g["position"]
+	_fade = 0.15
+	_stuck_t = 0.0
+	Sfx.play("clone_play", -10.0)
+
+
+func _command_step(delta: float) -> void:
+	var goal := _target
+	var stop_dist := 0.12
+	if mode == Mode.FOLLOW:
+		if not is_instance_valid(_follow):
+			mode = Mode.MOVE
+			_target = global_position
+			return
+		goal = _follow.global_position
+		stop_dist = FOLLOW_DIST
+		if global_position.distance_to(goal) > FOLLOW_MAX or _stuck_t > 1.2:
+			_rejoin(goal + _follow.global_basis.z * 1.6)
+			return
+	var to := Vector3(goal.x - global_position.x, 0.0, goal.z - global_position.z)
+	var dist := to.length()
+	if dist <= stop_dist:
+		holding = true
+		_stuck_t = 0.0
+		return
+	var dir := to / dist
+	rotation.y = lerp_angle(rotation.y, atan2(-dir.x, -dir.z), clampf(delta * 10.0, 0.0, 1.0))
+	var speed := WALK_SPEED * (1.4 if dist > 6.0 and mode == Mode.FOLLOW else 1.0)
+	var step := minf(speed * delta, dist - stop_dist * 0.5)
+	var space := get_world_3d().direct_space_state
+	var wall := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 1.0,
+		global_position + Vector3.UP * 1.0 + dir * (step + 0.45), 1)
+	var g: Dictionary = {}
+	if space.intersect_ray(wall).is_empty():
+		g = _ground_at(global_position + dir * step)
+	if g.is_empty():
+		holding = true
+		if mode == Mode.MOVE:
+			_target = global_position
+			blocked.emit()
+		else:
+			_stuck_t += delta
+		return
+	holding = false
+	_stuck_t = 0.0
+	global_position = g["position"]
+	_phase += delta * speed * 1.8
+	_swing = lerpf(_swing, 1.0, clampf(delta * 10.0, 0.0, 1.0))
+
+
 func _physics_process(delta: float) -> void:
+	if mode != Mode.REPLAY:
+		_command_step(delta)
+		return
 	if holding or frames.is_empty():
 		return
 	if _idx < frames.size():

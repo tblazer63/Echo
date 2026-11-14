@@ -16,7 +16,9 @@ Run `ECHO.exe` (Windows 10/11, x64). It needs no install. One run through the mi
 | F (or Ctrl) | Echo Dash (brief invulnerability) |
 | **Q / Right-click** | **Echo Scan** (reveals hidden structures, stuns drones, exposes their cores) |
 | **Left-click** (hold) | **Sonic Bolt** |
-| **R** | **Record an Echo Clone** (5 s) |
+| **R** | **Record an Echo Clone** (5 s replay of your moves) |
+| **C / Middle-click** | **Send Echo**: your echo partner walks to the spot you aim at and holds it |
+| **V** | **Echo Follow**: your echo follows you and rejoins you if it gets left behind |
 | E | Interact (ride the Echo Wave) |
 | Esc | Pause (resume, restart from checkpoint, settings) |
 
@@ -42,7 +44,7 @@ Choose either one from the main menu, or press **Continue** after finishing Leve
 2. **Resonant Crossing.** A cracked relay pillar is out of your scan's reach. Reveal the hidden steps, scan beside it, and its beam of sound unlocks the gate.
 3. **Courtyard Interference (combat).** Three corrupted Echo Drones attack, firing slow, readable shots after a visible charge-up. Sonic Bolts damage them. **Echo Scan stuns them and exposes their cores for double damage**, so sound is your best weapon.
 4. **Echo Surfing.** Clearing the courtyard wakes a Surf Generator. Ride a glowing wave over the sea of clouds, steer with A/D, and collect rings.
-5. **The Duplicate Key (Echo Clones).** Two pressure switches have to be held at the same time. Stand on switch **A** and press **R** to record your echo. When the hologram appears and holds A, step onto switch **B**. Signs and prompts walk you through it.
+5. **The Duplicate Key (Echo Clones).** Two pressure switches have to be held at the same time. Aim at switch **A** and press **C**: your holographic echo walks over and holds it, and then you step onto switch **B**. Alternatively, stand on A and press **R** to record an echo that replays your moves. **V** calls the echo back to follow you. The echo walks in straight lines and stops at gaps and walls, so in Level 2 you have to guide it around the pillar.
 6. **Transforming bridge.** Scan the ancient resonance machine and a shattered bridge swings up into place.
 7. **The Sentinel (mini-boss).** A floating guardian seals the Spire. Two pylons power its shield, and you break them with Echo Scan or Sonic Bolts. With the shield down, scan to expose its core for double damage. At half health it re-forms the shield and switches to 3-shot spreads.
 8. **World restoration.** Restore the Spire: the Dissonance crystals shatter, the muted world floods with color, waterfalls return, flowers bloom, a new music layer begins, and the drones you defeated wake up as friendly robots that circle the Spire.
@@ -52,23 +54,30 @@ Choose either one from the main menu, or press **Continue** after finishing Leve
 - **Everything is made in code.** There are no imported models, textures or audio files. Islands, ruins, drones, grass, waterfalls and clouds come from primitives and custom shaders. All sound effects and the two music layers are synthesized at startup.
 - **One echo rule.** Any node in the `echo_reactive` group with an `on_echo(origin, wave)` method reacts to sound. Hidden platforms, the relay, drones, the machine and the holographic ruins all share that single rule.
 - **The world itself shows sound.** The pulse writes its origin and radius to global shader uniforms, so every stone surface draws the travelling ring.
-- **Echo Clones** record your transform every physics tick and replay it deterministically on an `AnimatableBody3D` that switches can detect.
+- **Echo Clones** have two modes. Recorded clones replay your transform frame by frame. Commanded clones (Move Here / Follow / Return) step along the ground using raycasts that detect walls and gaps, give feedback when a target is unreachable, and rejoin you automatically. Both run on an `AnimatableBody3D` that switches can detect.
 - **Echo Surfing** follows a Catmull-Rom `Curve3D` with a generated ribbon mesh and a flowing-wave shader.
 - **Runs on integrated GPUs.** Graphics quality is detected automatically: FSR upscaling, cheaper shadows and MultiMesh batching. It holds about 60 FPS on an AMD Radeon 610M.
-- **Automated QA.** `--qa=logic` plays through the whole mission in 38 checks. It reveals and walks the bridges, fights the drones with real bolts, rides the wave, solves the clone puzzle, transforms the bridge, beats both phases of the Sentinel and restores the world. `--qa=shots:<dir>` and `--qa=perf` cover screenshots and frame timing.
+- **Automated QA.** `--qa=logic` plays through the whole of Level 1 in 45 checks, and `--qa=logic2` plays Level 2 in 17. It reveals and walks the bridges, fights the drones with real bolts, rides the wave, solves the clone puzzle, transforms the bridge, beats both phases of the Sentinel and restores the world. `--qa=shots:<dir>` and `--qa=perf` cover screenshots and frame timing.
 
 ## Run from source
 
 ```
 godot --path .
-godot --headless --path . -- --qa=logic     # Level 1 playthrough (42 checks)
+godot --headless --path . -- --qa=logic     # Level 1 playthrough (45 checks)
 godot --headless --path . -- --qa=logic2    # Level 2 playthrough (17 checks)
 godot --path . -- --qa=perf
 ```
 
 ## Roadmap (after the hackathon)
 
-Stone Guardian, Echo Anchor, Resonance Burst, the Second and Third Spires, and the Resonance Titan.
+The hackathon build is a vertical slice of a larger design that leads to the **Heart of Auralis**.
+
+- **Levels:** Forgotten Shores (intro), Resonance Gardens (sound-responsive plants and vine bridges), Shattered Crossing (surf chase with branching routes), Twin Chambers (split-path co-op with the clone, a two-person elevator and character switching), Clockwork Foundry (rotating machinery and Stone Guardians), Storm Citadel (resonance storms and the **Dissonance Weaver**), and Heart of Auralis (the 3-phase **Resonance Titan** and the full restoration).
+- **Abilities:** Shockwave, Echo Anchor (a placeable sound source) and Resonance Burst.
+- **Enemies:** Stone Guardian and Resonance Beast.
+- **Puzzles:** crystal resonance routing, frequency matching and wave interference.
+- **Clone:** Interact/Hold commands and direct character switching.
+- **Progression:** shard upgrades and music layers that grow as each Spire is restored.
 
 ## Credits
 

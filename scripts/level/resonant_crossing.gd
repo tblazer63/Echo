@@ -153,9 +153,9 @@ func setup_surf(points: PackedVector3Array, ring_count: int, obstacle_count: int
 		Game.rings += 1)
 	surf.finished.connect(func(_c: int, _t: int) -> void:
 		if clone_gate and not clone_gate.is_open:
-			Game.set_objective("Stand on switch A and press R to record your echo")
+			Game.set_objective("Aim at switch A and press C to send your echo there (or stand on it + R)")
 			Game.set_progress("Then stand on switch B while your echo holds A")
-			Game.prompt("Two switches, one of you. Record an ECHO CLONE: stand on A, press R.", 6.0, "clone_hint"))
+			Game.prompt("Two switches, one of you. Aim at switch A and press  C  to send your ECHO there.", 6.0, "clone_hint"))
 	return surf
 
 
@@ -171,7 +171,7 @@ func setup_clone_puzzle(a_pos: Vector3, b_pos: Vector3, gate_pos: Vector3, gate_
 	add_child(switch_b)
 	switch_a.changed.connect(_on_switch_changed)
 	switch_b.changed.connect(_on_switch_changed)
-	_sign(a_pos + Vector3.UP * 2.35, "1 · STAND HERE + PRESS R\n(record your echo)")
+	_sign(a_pos + Vector3.UP * 2.35, "1 · SEND YOUR ECHO HERE\n(aim here + C, or stand here + R)")
 	_sign(b_pos + Vector3.UP * 2.35, "2 · THEN STAND HERE\nwhile your echo holds A")
 	clone_gate = LockedGate.new()
 	clone_gate.position = gate_pos
@@ -223,7 +223,7 @@ func _process(delta: float) -> void:
 		_clone_hint_t += delta
 		if _clone_hint_t > 1.5:
 			_clone_hint_t = -6.0
-			Game.prompt("Press  R  now to record your echo standing on switch %s" % on_switch.id, 4.0)
+			Game.prompt("Press  R  to record your echo on switch %s  (or aim at it from afar + C)" % on_switch.id, 4.0)
 	else:
 		_clone_hint_t = minf(_clone_hint_t, 0.0)
 	if not _clone_hold_hinted:

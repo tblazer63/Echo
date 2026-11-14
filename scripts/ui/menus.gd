@@ -134,7 +134,7 @@ func _build_main() -> Control:
 	var quit := UiKit.button("✕   QUIT")
 	quit.pressed.connect(func() -> void: get_tree().quit())
 	v.add_child(quit)
-	var hint := UiKit.label("WASD move  ·  Space jump  ·  Q / RMB  Echo Scan  ·  LMB  Sonic Bolt  ·  F  Dash  ·  R  Record Echo Clone  ·  E  Interact", 15, Color(1, 1, 1, 0.85))
+	var hint := UiKit.label("WASD move  ·  Space jump  ·  Q / RMB  Echo Scan  ·  LMB  Sonic Bolt  ·  F  Dash  ·  R  Record Echo  ·  C  Send Echo  ·  V  Echo Follow  ·  E  Interact", 15, Color(1, 1, 1, 0.85))
 	hint.anchor_top = 1.0
 	hint.anchor_bottom = 1.0
 	hint.offset_left = 110

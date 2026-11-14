@@ -662,6 +662,24 @@ func _qa_logic() -> void:
 
 	# 9. Clone puzzle: clone holds switch A while the player stands on B.
 	_check(not level.clone_gate.is_open, "clone gate starts locked", fails)
+	# 9a. Commanded echo: C sends it to switch A, V makes it follow away.
+	var mid := (level.switch_a.global_position + level.switch_b.global_position) * 0.5
+	_teleport(mid + Vector3.UP * 0.2, 90.0)
+	await _wait(0.4)
+	recorder.command_move(level.switch_a.global_position)
+	await _wait(2.2)
+	var cc := recorder.current_clone
+	_check(cc != null and cc.global_position.distance_to(level.switch_a.global_position) < 0.6,
+		"commanded echo walks onto switch A (%s)" % (str(cc.global_position) if cc else "none"), fails)
+	_check(level.switch_a.is_pressed() and not level.clone_gate.is_open, "commanded echo holds switch A (gate still locked)", fails)
+	_teleport(ResonantCrossing.ISLAND_D + Vector3(3.0, 0.2, 0.0), 90.0)
+	await _wait(0.2)
+	recorder.command_follow()
+	await _wait(2.5)
+	_check(not level.switch_a.is_pressed() and cc != null and cc.global_position.distance_to(player.global_position) < 4.0,
+		"V: echo follows the player off switch A (dist %.1f)" % (cc.global_position.distance_to(player.global_position) if cc else -1.0), fails)
+	recorder.clear_clone()
+	await _wait(0.6)
 	_teleport(level.switch_a.global_position + Vector3.UP * 0.2, 90.0)
 	await _wait(0.5)
 	await _press("record")
