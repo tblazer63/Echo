@@ -680,6 +680,18 @@ func _qa_logic() -> void:
 		"V: echo follows the player off switch A (dist %.1f)" % (cc.global_position.distance_to(player.global_position) if cc else -1.0), fails)
 	recorder.clear_clone()
 	await _wait(0.6)
+	# 9b. Echo Lift co-op puzzle: echo holds the LIFT switch, the lift rises.
+	_check(level.echo_lifts.size() == 1, "level 1 has an Echo Lift", fails)
+	if level.echo_lifts.size() == 1:
+		var lift: EchoLift = level.echo_lifts[0]
+		_teleport(ResonantCrossing.ISLAND_D + Vector3(0.5, 0.2, 6.5), 90.0)
+		await _wait(0.3)
+		_check(not lift.is_up(), "lift starts down", fails)
+		recorder.command_move(lift.sw.global_position)
+		await _wait(5.5)
+		_check(lift.sw.is_pressed() and lift.is_up(), "echo on the LIFT switch raises the lift (y %.1f)" % lift.position.y, fails)
+		recorder.clear_clone()
+		await _wait(0.6)
 	_teleport(level.switch_a.global_position + Vector3.UP * 0.2, 90.0)
 	await _wait(0.5)
 	await _press("record")

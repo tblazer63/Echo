@@ -97,6 +97,7 @@ static func _build_clone_island(level: ResonantCrossing) -> void:
 	Builders.arch(level, f + Vector3(0, 0, -6.4), 4.0, 5.0, 0.0)    # frames the pier
 	Builders.waterfall(level, f + Vector3(7.95, -0.4, -2.0), 3.0, 26.0, deg_to_rad(90))
 	level.add_shard(f + Vector3(5.5, 1.2, -4.5))
+	level.add_echo_lift(f, f + Vector3(-1.5, 0, 5.5), f + Vector3(-8.7, 0, 3.0), 9.0)
 	# Prompt only: the surf's `finished` handler already sets the step-by-step
 	# switch objective, which this zone must not overwrite.
 	level.add_zone(f + Vector3(1.5, 1.5, 3.0), Vector3(10, 3, 6), func() -> void:

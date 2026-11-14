@@ -45,6 +45,7 @@ Choose either one from the main menu, or press **Continue** after finishing Leve
 3. **Courtyard Interference (combat).** Three corrupted Echo Drones attack, firing slow, readable shots after a visible charge-up. Sonic Bolts damage them. **Echo Scan stuns them and exposes their cores for double damage**, so sound is your best weapon.
 4. **Echo Surfing.** Clearing the courtyard wakes a Surf Generator. Ride a glowing wave over the sea of clouds, steer with A/D, and collect rings.
 5. **The Duplicate Key (Echo Clones).** Two pressure switches have to be held at the same time. Aim at switch **A** and press **C**: your holographic echo walks over and holds it, and then you step onto switch **B**. Alternatively, stand on A and press **R** to record an echo that replays your moves. **V** calls the echo back to follow you. The echo walks in straight lines and stops at gaps and walls, so in Level 2 you have to guide it around the pillar.
+5b. **Echo Lift (co-op elevator, optional).** A lift beside the island rises only while its LIFT switch is held. Send your echo to the switch with C, then ride up to a hidden ledge with a shard. Level 2 has its own lift.
 6. **Transforming bridge.** Scan the ancient resonance machine and a shattered bridge swings up into place.
 7. **The Sentinel (mini-boss).** A floating guardian seals the Spire. Two pylons power its shield, and you break them with Echo Scan or Sonic Bolts. With the shield down, scan to expose its core for double damage. At half health it re-forms the shield and switches to 3-shot spreads.
 8. **World restoration.** Restore the Spire: the Dissonance crystals shatter, the muted world floods with color, waterfalls return, flowers bloom, a new music layer begins, and the drones you defeated wake up as friendly robots that circle the Spire.
@@ -57,13 +58,13 @@ Choose either one from the main menu, or press **Continue** after finishing Leve
 - **Echo Clones** have two modes. Recorded clones replay your transform frame by frame. Commanded clones (Move Here / Follow / Return) step along the ground using raycasts that detect walls and gaps, give feedback when a target is unreachable, and rejoin you automatically. Both run on an `AnimatableBody3D` that switches can detect.
 - **Echo Surfing** follows a Catmull-Rom `Curve3D` with a generated ribbon mesh and a flowing-wave shader.
 - **Runs on integrated GPUs.** Graphics quality is detected automatically: FSR upscaling, cheaper shadows and MultiMesh batching. It holds about 60 FPS on an AMD Radeon 610M.
-- **Automated QA.** `--qa=logic` plays through the whole of Level 1 in 45 checks, and `--qa=logic2` plays Level 2 in 17. It reveals and walks the bridges, fights the drones with real bolts, rides the wave, solves the clone puzzle, transforms the bridge, beats both phases of the Sentinel and restores the world. `--qa=shots:<dir>` and `--qa=perf` cover screenshots and frame timing.
+- **Automated QA.** `--qa=logic` plays through the whole of Level 1 in 48 checks, and `--qa=logic2` plays Level 2 in 17. It reveals and walks the bridges, fights the drones with real bolts, rides the wave, solves the clone puzzle, transforms the bridge, beats both phases of the Sentinel and restores the world. `--qa=shots:<dir>` and `--qa=perf` cover screenshots and frame timing.
 
 ## Run from source
 
 ```
 godot --path .
-godot --headless --path . -- --qa=logic     # Level 1 playthrough (45 checks)
+godot --headless --path . -- --qa=logic     # Level 1 playthrough (48 checks)
 godot --headless --path . -- --qa=logic2    # Level 2 playthrough (17 checks)
 godot --path . -- --qa=perf
 ```

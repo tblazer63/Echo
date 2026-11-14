@@ -16,6 +16,7 @@ var surf: EchoSurf
 var switch_a: PressureSwitch
 var switch_b: PressureSwitch
 var clone_gate: LockedGate
+var echo_lifts: Array[EchoLift] = []
 var machine: ResonanceMachine
 var bridge: TransformBridge
 var restoration: RestorationController
@@ -183,6 +184,28 @@ func setup_clone_puzzle(a_pos: Vector3, b_pos: Vector3, gate_pos: Vector3, gate_
 		Game.set_progress("")
 		Game.prompt("Two echoes, one key. The gate opens!", 3.0)
 		Game.set_objective("Echo Scan the ancient machine on the pier"))
+
+
+## Co-op puzzle "Echo Lift": the echo holds a remote switch while you ride the
+## lift up to a hidden ledge with a shard. Optional, so it can never soft-lock.
+func add_echo_lift(island_center: Vector3, switch_pos: Vector3, lift_pos: Vector3, rise: float) -> EchoLift:
+	var sw := PressureSwitch.new()
+	sw.id = "LIFT"
+	sw.position = switch_pos
+	add_child(sw)
+	var lift := EchoLift.new()
+	lift.position = lift_pos
+	lift.rise = rise
+	lift.sw = sw
+	add_child(lift)
+	var out := Vector3(lift_pos.x - island_center.x, 0.0, lift_pos.z - island_center.z).normalized()
+	var ledge := lift_pos + out * 3.9 + Vector3.UP * rise
+	Builders.island(self, ledge, 2.4, 3.0)
+	add_shard(ledge + Vector3.UP * 1.2)
+	_sign(switch_pos + Vector3.UP * 2.5, "ECHO LIFT · send your echo here (aim + C)\nthen ride the lift yourself")
+	_sign(lift_pos + Vector3.UP * 2.2, "LIFT · rises while the switch is held")
+	echo_lifts.append(lift)
+	return lift
 
 
 func _sign(pos: Vector3, text: String) -> void:
@@ -462,6 +485,7 @@ func _build_layout() -> void:
 	Builders.pillar(self, ISLAND_D + Vector3(-1.0, 0, -6.0), 4.0, 1.0, true)
 	Builders.arch(self, ISLAND_D + Vector3(4.0, 0, 0.0), 3.4, 4.5, deg_to_rad(90))
 	add_shard(ISLAND_D + Vector3(5.6, 1.2, 0.0))
+	add_echo_lift(ISLAND_D, ISLAND_D + Vector3(2.5, 0, 5.5), ISLAND_D + Vector3(8.3, 0, 2.5), 8.0)
 	# Pier west of D with the clone gate and the resonance machine.
 	Builders.walkway(self, ISLAND_D + Vector3(-7.0, 0, 0), ISLAND_D + Vector3(-13.0, 0, 0), 3.6)
 	setup_clone_puzzle(ISLAND_D + Vector3(-1.5, 0.0, 3.6), ISLAND_D + Vector3(-1.5, 0.0, -3.6),
