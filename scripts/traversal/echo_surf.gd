@@ -229,7 +229,7 @@ func _build_rings() -> void:
 	tor.outer_radius = 1.1
 	tor.rings = 28
 	tor.ring_segments = 8
-	var mat := _glow_mat(Color(1.0, 0.82, 0.38), 3.0)
+	var mat := _glow_mat(Color(1.0, 0.78, 0.32), 1.1)
 	mat.rim_enabled = true
 	mat.rim = 1.0
 	mat.rim_tint = 0.0

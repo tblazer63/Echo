@@ -3,7 +3,7 @@ render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabl
 
 // Flowing energy track for Echo Surfing. UV.x = across (0..1), UV.y = metres along.
 uniform vec3 color : source_color = vec3(0.25, 0.95, 1.0);
-uniform vec3 core_color : source_color = vec3(0.75, 1.0, 1.0);
+uniform vec3 core_color : source_color = vec3(0.45, 1.0, 1.0);
 uniform float energy : hint_range(0.0, 2.0) = 0.15;
 uniform float track_length = 100.0;
 uniform float flow_speed = 1.0;
@@ -33,5 +33,5 @@ void fragment() {
 	vec3 c = mix(color, core_color, clamp(chev * center + edge * 0.3, 0.0, 1.0));
 	float e = clamp(energy, 0.0, 2.0);
 	// Additive blend: brightness alone controls visibility.
-	ALBEDO = c * lum * e * ends;
+	ALBEDO = c * lum * e * ends * 0.5;
 }

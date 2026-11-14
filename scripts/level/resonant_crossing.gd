@@ -38,6 +38,8 @@ func _on_drone_defeated(_d: Node) -> void:
 
 
 func _on_switch_changed(_p: bool) -> void:
+	if clone_gate.is_open:
+		return
 	var count := int(switch_a.is_pressed()) + int(switch_b.is_pressed())
 	Game.set_progress("Switches  %d / 2" % count)
 	if count == 2 and not clone_gate.is_open:

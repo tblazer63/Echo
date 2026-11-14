@@ -168,6 +168,78 @@ func _run_qa() -> void:
 		await _qa_logic()
 	elif _qa.begins_with("perf"):
 		await _qa_perf()
+	elif _qa.begins_with("tour:"):
+		await _qa_tour(_qa.substr(5))
+
+
+## Screenshot tour of the Last Resonance systems (combat, surf, clone, bridge, restoration).
+func _qa_tour(dir: String) -> void:
+	player.health.grant_iframes(999.0)
+	var B := ResonantCrossing.ISLAND_B
+	var D := ResonantCrossing.ISLAND_D
+	_teleport(B + Vector3(0, 0.2, 5.0), 0.0, 14.0)
+	await _wait(3.0)
+	await _shot(dir, "10_combat.png")
+	player.emitter.charge = 1.0
+	player.emitter.try_pulse()
+	await _wait(0.5)
+	await _shot(dir, "11_combat_scan.png")
+	for i in 4:
+		player.emitter.charge = 1.0
+		player.emitter.try_fire(player.camera, player._muzzle())
+		await _wait(0.12)
+	await _shot(dir, "12_bolts.png")
+	for d in level.drones:
+		var tries := 0
+		while not d.is_defeated() and tries < 15:
+			var from := d.global_position + Vector3(0, 0.5, 3.0)
+			SonicBolt.fire(self, from, (d.global_position - from).normalized())
+			await _wait(0.3)
+			tries += 1
+	await _wait(1.0)
+	_teleport(B + Vector3(3.0, 0.2, 0.5), 160.0, 0.0)
+	await _wait(1.0)
+	await _shot(dir, "13_generator.png")
+	level.surf.board(player)
+	await _wait(1.6)
+	await _shot(dir, "14_surf.png")
+	while level.surf.is_riding():
+		await _wait(0.2)
+	await _wait(0.6)
+	_teleport(D + Vector3(4.0, 0.2, 0.0), 90.0, 12.0)
+	await _wait(1.2)
+	await _shot(dir, "15_temple_isle.png")
+	_teleport(level.switch_a.global_position + Vector3.UP * 0.2, 90.0)
+	await _wait(0.4)
+	recorder.start_recording()
+	await _wait(0.8)
+	recorder.stop_recording()
+	await _wait(0.5)
+	_teleport(D + Vector3(3.5, 0.2, -1.0), 70.0, 8.0)
+	await _wait(1.0)
+	await _shot(dir, "16_clone.png")
+	_teleport(level.switch_b.global_position + Vector3.UP * 0.2, 90.0)
+	await _wait(3.0)
+	_teleport(D + Vector3(-10.0, 0.2, -0.6), 90.0, 4.0)
+	await _wait(0.6)
+	player.emitter.charge = 1.0
+	player.emitter.try_pulse()
+	await _wait(1.6)
+	await _shot(dir, "17_bridge_moving.png")
+	await _wait(2.6)
+	await _shot(dir, "18_bridge_done.png")
+	_teleport(Vector3(0, 4.2, -84), 0.0, 0.0)
+	await _wait(0.5)
+	await _shot(dir, "19_spire_corrupted.png")
+	Input.action_press("move_forward")
+	await _wait(1.6)
+	Input.action_release("move_forward")
+	await _wait(3.5)
+	await _shot(dir, "20_restored.png")
+	await _wait(2.0)
+	await _shot(dir, "21_victory.png")
+	print("QA_TOUR_DONE")
+	get_tree().quit()
 
 
 ## Stable perf measurement: settle, then average over a window per viewpoint.
@@ -175,8 +247,9 @@ func _qa_perf() -> void:
 	var spots := [
 		["start", Vector3(0, 0.2, 3), 0.0],
 		["hub", Vector3(0, 0.2, -22), 0.0],
-		["steps", Vector3(0, 0.2, -55), 0.0],
-		["gate", Vector3(0, 4.2, -80), 0.0],
+		["combat", Vector3(0, 0.2, -49), 0.0],
+		["temple", Vector3(33, 4.2, -88), 90.0],
+		["spire", Vector3(5, 4.2, -84), 45.0],
 	]
 	await _wait(4.0)
 	for s in spots:

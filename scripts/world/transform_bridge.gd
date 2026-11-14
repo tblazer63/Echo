@@ -114,11 +114,11 @@ func _dust(amount: int) -> void:
 	p.initial_velocity_min = 0.8
 	p.initial_velocity_max = 2.6
 	p.gravity = Vector3(0, -1.5, 0)
-	p.scale_amount_min = 0.6
-	p.scale_amount_max = 1.5
+	p.scale_amount_min = 0.3
+	p.scale_amount_max = 0.8
 	var m := SphereMesh.new()
-	m.radius = 0.25
-	m.height = 0.5
+	m.radius = 0.12
+	m.height = 0.24
 	m.radial_segments = 6
 	m.rings = 3
 	var mat := StandardMaterial3D.new()
@@ -128,7 +128,7 @@ func _dust(amount: int) -> void:
 	m.material = mat
 	p.mesh = m
 	var g := Gradient.new()
-	g.set_color(0, Color(0.85, 0.82, 0.74, 0.55))
+	g.set_color(0, Color(0.85, 0.82, 0.74, 0.35))
 	g.set_color(1, Color(0.85, 0.82, 0.74, 0.0))
 	p.color_ramp = g
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
