@@ -179,7 +179,7 @@ func _process(delta: float) -> void:
 		(_vignette.material as ShaderMaterial).set_shader_parameter("amount", _vig)
 	if recorder and recorder.get("is_recording"):
 		var t: float = recorder.get("rec_time")
-		_rec_label.text = "●  REC ECHO   %.1f / 5s" % t
+		_rec_label.text = UiKit.safe("●  REC ECHO   %.1f / 5s" % t)
 		_rec_label.visible = true
 	else:
 		_rec_label.visible = false

@@ -35,9 +35,22 @@ static func wide() -> Font:
 	return _wide
 
 
+## Browsers have no system fonts, so the fallback font lacks arrow/symbol
+## glyphs (they render as boxes). On web, drop U+2190..U+2BFF symbols.
+static func safe(text: String) -> String:
+	if not OS.has_feature("web"):
+		return text
+	var out := ""
+	for i in text.length():
+		var c := text.unicode_at(i)
+		if (c < 0x2190 or c > 0x2BFF) and c != 0x2016:
+			out += char(c)
+	return out.strip_edges()
+
+
 static func label(text: String, size: int, color: Color = TEXT, f: Font = null) -> Label:
 	var l := Label.new()
-	l.text = text
+	l.text = safe(text)
 	l.add_theme_font_override("font", f if f else font())
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
@@ -65,7 +78,7 @@ static func panel_style(alpha: float = 1.0) -> StyleBoxFlat:
 
 static func button(text: String) -> Button:
 	var b := Button.new()
-	b.text = text
+	b.text = safe(text)
 	b.custom_minimum_size = Vector2(320, 54)
 	b.add_theme_font_override("font", spaced())
 	b.add_theme_font_size_override("font_size", 22)
