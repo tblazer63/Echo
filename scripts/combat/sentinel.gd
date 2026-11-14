@@ -240,7 +240,8 @@ func _physics_process(delta: float) -> void:
 		_shield.rotation.y += delta * 0.6
 
 	if _defeated:
-		var rest := arena_center + Vector3.UP * 2.5
+		# Drift aside so the restored Spire stays in view.
+		var rest := arena_center + Vector3(-8.0, 7.0, 4.0)
 		global_position = global_position.lerp(rest, clampf(delta * 0.8, 0.0, 1.0))
 		return
 	if not active:

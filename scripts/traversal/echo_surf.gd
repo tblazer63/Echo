@@ -252,10 +252,7 @@ func _build_rings() -> void:
 	tor.outer_radius = 1.1
 	tor.rings = 28
 	tor.ring_segments = 8
-	var mat := _glow_mat(Color(1.0, 0.78, 0.32), 1.1)
-	mat.rim_enabled = true
-	mat.rim = 1.0
-	mat.rim_tint = 0.0
+	var mat := _glow_mat(Color(1.0, 0.75, 0.3), 0.55)
 	for i in ring_count:
 		var f := 0.5 if ring_count == 1 else 0.15 + 0.75 * float(i) / float(ring_count - 1)
 		var d := _length * f
@@ -276,10 +273,10 @@ func _build_rings() -> void:
 func _build_obstacles() -> void:
 	if obstacle_count <= 0:
 		return
-	var mat := _glow_mat(CORRUPT, 2.2)
+	var mat := _glow_mat(CORRUPT, 0.9)
 	var sph := SphereMesh.new()
-	sph.radius = 0.7
-	sph.height = 1.4
+	sph.radius = 0.55
+	sph.height = 1.1
 	sph.radial_segments = 12
 	sph.rings = 6
 	var tor := TorusMesh.new()
